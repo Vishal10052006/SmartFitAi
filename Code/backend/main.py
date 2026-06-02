@@ -14,6 +14,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://192.168.29.139:5173",
+        "https://smart-fit-ai-six.vercel.app",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
