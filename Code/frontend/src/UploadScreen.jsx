@@ -1,51 +1,261 @@
+import { colors } from "./design-system/colors";
+
 function UploadScreen({ preview, loading, onUpload, onAnalyze }) {
   return (
-    <>
-      <div style={{
-        border: "2px dashed #333",
-        borderRadius: "20px",
-        padding: "40px",
-        textAlign: "center",
+    <div
+      style={{
         width: "100%",
-        maxWidth: "400px",
-        marginBottom: "24px",
-        overflow: "hidden",
-        boxSizing: "border-box"
-      }}>
-        {preview ? (
-          <img src={preview} alt="preview" style={{
-            width: "200px", height: "200px",
-            objectFit: "cover", borderRadius: "12px", marginBottom: "16px"
-          }} />
-        ) : (
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>📷</div>
-        )}
-        <p style={{ color: "#888", marginBottom: "16px", fontSize: "14px" }}>
-          {preview ? "Photo ready for analysis" : "Upload your photo to get started"}
+        maxWidth: "420px",
+      }}
+    >
+      {/* Hero Section */}
+      <div
+        style={{
+          marginBottom: "24px",
+          textAlign: "center",
+        }}
+      >
+        <h2
+          style={{
+            color: colors.text,
+            fontSize: "28px",
+            fontWeight: "700",
+            marginBottom: "8px",
+          }}
+        >
+          Create Your Body Profile
+        </h2>
+
+        <p
+          style={{
+            color: colors.textSecondary,
+            fontSize: "15px",
+            lineHeight: "1.6",
+          }}
+        >
+          Upload a full-body photo and let SmartFit AI analyze your body shape,
+          measurements, and style profile.
         </p>
-        <label style={{
-          background: "#222", color: "#fff", padding: "10px 20px",
-          borderRadius: "20px", cursor: "pointer", fontSize: "14px",
-          display: "inline-block"
-        }}>
+      </div>
+
+      {/* Upload Card */}
+      <div
+        style={{
+          background: colors.card,
+          border: `1px solid ${colors.border}`,
+          borderRadius: "24px",
+          padding: "28px",
+          textAlign: "center",
+          marginBottom: "24px",
+        }}
+      >
+        {preview ? (
+          <>
+            <img
+              src={preview}
+              alt="preview"
+              style={{
+                width: "220px",
+                height: "220px",
+                objectFit: "cover",
+                borderRadius: "20px",
+                marginBottom: "20px",
+                border: `2px solid ${colors.primary}`,
+              }}
+            />
+
+            <p
+              style={{
+                color: colors.success,
+                fontWeight: "600",
+                marginBottom: "16px",
+              }}
+            >
+              ✓ Photo Ready For Analysis
+            </p>
+          </>
+        ) : (
+          <>
+            <div
+              style={{
+                width: "90px",
+                height: "90px",
+                borderRadius: "50%",
+                background: "rgba(108,99,255,0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 20px",
+                fontSize: "36px",
+              }}
+            >
+              📸
+            </div>
+
+            <p
+              style={{
+                color: colors.text,
+                fontWeight: "600",
+                marginBottom: "8px",
+              }}
+            >
+              Front Body Photo
+            </p>
+
+            <p
+              style={{
+                color: colors.textSecondary,
+                fontSize: "14px",
+                marginBottom: "20px",
+              }}
+            >
+              Required • Full body visible
+            </p>
+          </>
+        )}
+
+        <label
+          style={{
+            background: colors.primary,
+            color: "#FFFFFF",
+            padding: "12px 24px",
+            borderRadius: "999px",
+            cursor: "pointer",
+            fontWeight: "600",
+            display: "inline-block",
+          }}
+        >
           Choose Photo
-          <input type="file" accept="image/*" onChange={onUpload} style={{ display: "none" }} />
+
+          <input
+            type="file"
+            accept="image/*"
+            onChange={onUpload}
+            style={{ display: "none" }}
+          />
         </label>
       </div>
 
+      {/* Optional Details */}
+      <div
+        style={{
+          background: colors.card,
+          borderRadius: "20px",
+          padding: "20px",
+          marginBottom: "24px",
+          border: `1px solid ${colors.border}`,
+        }}
+      >
+        <p
+          style={{
+            color: colors.text,
+            fontWeight: "600",
+            marginBottom: "16px",
+          }}
+        >
+          Optional Details
+        </p>
+
+        <input
+          type="number"
+          placeholder="Height (cm)"
+          style={{
+            width: "100%",
+            padding: "12px",
+            marginBottom: "12px",
+            borderRadius: "12px",
+            border: `1px solid ${colors.border}`,
+            boxSizing: "border-box",
+          }}
+        />
+
+        <input
+          type="number"
+          placeholder="Weight (kg)"
+          style={{
+            width: "100%",
+            padding: "12px",
+            marginBottom: "12px",
+            borderRadius: "12px",
+            border: `1px solid ${colors.border}`,
+            boxSizing: "border-box",
+          }}
+        />
+
+        <select
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: "12px",
+            border: `1px solid ${colors.border}`,
+            boxSizing: "border-box",
+          }}
+        >
+          <option value="">Gender (Optional)</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+      </div>
+
+      {/* Analysis Features */}
+      <div
+        style={{
+          background: colors.card,
+          borderRadius: "20px",
+          padding: "20px",
+          marginBottom: "24px",
+          border: `1px solid ${colors.border}`,
+        }}
+      >
+        <p
+          style={{
+            color: colors.text,
+            fontWeight: "600",
+            marginBottom: "14px",
+          }}
+        >
+          SmartFit AI Will Analyze
+        </p>
+
+        <div
+          style={{
+            color: colors.textSecondary,
+            fontSize: "14px",
+            lineHeight: "1.9",
+          }}
+        >
+          <p>✓ Body Shape Detection</p>
+          <p>✓ Shoulder Analysis</p>
+          <p>✓ Body Measurements</p>
+          <p>✓ Size Recommendation</p>
+          <p>✓ Style DNA Profile</p>
+        </div>
+      </div>
+
+      {/* Analyze Button */}
       {preview && (
-        <button onClick={onAnalyze} style={{
-          background: "#E9C46A", color: "#000", border: "none",
-          padding: "14px 32px", borderRadius: "30px", fontSize: "16px",
-          fontWeight: "700", cursor: "pointer", marginBottom: "24px",
-          width: "100%", maxWidth: "400px",
-          boxSizing: "border-box"
-        }}>
-          {loading ? "Analysing..." : "Analyse My Colors"}
+        <button
+          onClick={onAnalyze}
+          disabled={loading}
+          style={{
+            width: "100%",
+            background: colors.primary,
+            color: "#FFFFFF",
+            border: "none",
+            padding: "16px",
+            borderRadius: "18px",
+            fontSize: "16px",
+            fontWeight: "700",
+            cursor: "pointer",
+          }}
+        >
+          {loading
+            ? "Analyzing Your Body..."
+            : "Analyze My Body"}
         </button>
       )}
-    </>
-  )
+    </div>
+  );
 }
 
-export default UploadScreen
+export default UploadScreen;
