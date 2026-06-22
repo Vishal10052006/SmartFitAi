@@ -41,3 +41,18 @@ async def outfits(skin_tone: str):
         {"name": "White linen kurta", "color": "#F5F5F5", "occasion": "Casual", "style": "Minimal"},
     ]
     return {"outfits": all_outfits}
+
+@app.post("/style-dna")
+async def style_dna(file: UploadFile = File(...)):
+    return {
+        "status": "success",
+        "style_dna": {
+            "skin_tone": {"tone": "Warm Medium"},
+            "body_shape": {"body_shape": "Inverted Triangle"},
+            "shape_rules": {
+                "fit_tip": "Balance broad shoulders with volume on the lower half",
+                "avoid": ["Heavy shoulder details"],
+                "prefer": ["A-line skirts", "Wide leg pants"]
+            }
+        }
+    }

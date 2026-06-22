@@ -54,7 +54,7 @@ export default function App() {
       formData.append("file", image);
 
       const res = await fetch(
-        "http://127.0.0.1:8000/style-dna",
+        `${import.meta.env.VITE_API_URL}/style-dna`,
         {
           method: "POST",
           body: formData,
