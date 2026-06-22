@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BottomNavigation from "./BottomNavigation";
 
 import { colors } from "./design-system/colors";
 
@@ -6,17 +7,30 @@ import UploadScreen from "./UploadScreen";
 import ResultScreen from "./ResultScreen";
 import OutfitFeed from "./OutfitFeed";
 import HomeScreen from "./HomeScreen";
-import Onboarding from "./Onboarding";
+
 import WardrobeScreen from "./WardrobeScreen";
+import buildStyleDNA from "./ai/styleDNA/buildStyleDNA";
+import ColorPaletteScreen from "./ColorPaletteScreen";
+import StyleDNAScreen from "./StyleDNAScreen";
+
+import detectIntent from "./ai/assistant/detectIntent";
+import FashionAssistantScreen from "./FashionAssistantScreen";
+
+console.log(
+  "TEST",
+  detectIntent("Open wardrobe")
+);
 
 export default function App() {
-  const [view, setView] = useState("onboarding");
+  const [view, setView] = useState("home");
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savedLooks, setSavedLooks] = useState([]);
+  
+  const [styleDNA, setStyleDNA] = useState(null);
   
   const handleUpload = (e) => {
     const file = e.target.files[0];
@@ -27,46 +41,60 @@ export default function App() {
   };
 
   const analyzeBody = async () => {
-  if (!image) return;
 
-  setLoading(true);
-  setError(null);
+    if (!image) return;
 
-  try {
-    const formData = new FormData();
+    setLoading(true);
+    setError(null);
 
-    formData.append(
-      "front_image",
-      image
-    );
+    try {
 
-    const res = await fetch(
-      "http://127.0.0.1:8000/api/body-analysis",
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
+      const formData = new FormData();
 
-    if (!res.ok) {
-      throw new Error(
-        "Body analysis failed."
+      formData.append("file", image);
+
+      const res = await fetch(
+        "http://127.0.0.1:8000/style-dna",
+        {
+          method: "POST",
+          body: formData,
+        }
       );
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText);
+      }
+
+      const data = await res.json();
+
+      setResult(data);
+
+      const generatedDNA = buildStyleDNA({
+        stylePreference: "Smart Casual",
+        occasionPreference: "College"
+      });
+
+      setStyleDNA(generatedDNA);
+
+      console.log("GENERATED DNA");
+      console.log(generatedDNA);
+
+      setView("result");
+
+    } catch (err) {
+
+      setError(
+        err.message ||
+        "Something went wrong"
+      );
+
+    } finally {
+
+      setLoading(false);
+
     }
-
-    const data = await res.json();
-
-    setResult(data);
-    setView("result");
-  } catch (err) {
-    setError(
-      err.message ||
-      "Something went wrong"
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const resetAll = () => {
     setImage(null);
@@ -167,7 +195,7 @@ export default function App() {
             marginBottom: "6px",
           }}
         >
-          Your Personal AI Stylist
+          Your Personal AI Stylist Kiara.
         </p>
 
         <h1
@@ -196,6 +224,7 @@ export default function App() {
           width: "100%",
           maxWidth: "420px",
           padding: "24px 16px",
+          paddingBottom: "140px"
         }}
       >
         {/* Error */}
@@ -237,26 +266,25 @@ export default function App() {
           </div>
         )}
 
-        {view === "onboarding" && (
-          <Onboarding
-            onFinish={() => setView("home")}
-          />
-        )}
-
         {view === "home" && (
-          <HomeScreen
-            skinTone={result?.skin_tone}
-            onAnalyze={() => setView("upload")}
-            onWardrobe={() => setView("wardrobe")}
-            onViewLooks={() => {
-              if (result) {
-                setView("feed");
-              } else {
-                alert("Please analyze a photo first.");
-                setView("upload");
-              }
-            }}
-          />
+          <>
+
+            <HomeScreen
+              skinTone={result?.style_dna?.skin_tone?.tone}
+              styleDNA={styleDNA}
+              onAnalyze={() => setView("upload")}
+              onWardrobe={() => setView("wardrobe")}
+              onPalette={() => setView("palette")}
+              onViewLooks={() => {
+                if (result) {
+                  setView("feed");
+                } else {
+                  alert("Please analyze a photo first.");
+                  setView("upload");
+                }
+              }}
+            />
+          </>
         )}
 
         {view === "upload" && (
@@ -271,17 +299,36 @@ export default function App() {
         {view === "result" && result && (
           <ResultScreen
             result={result}
-            onSeeOutfits={() => setView("feed")}
+            onSeeOutfits={() => setView("styleDNA")}
             onReset={resetAll}
           />
         )}
 
-        {view === "feed" && result && (
+        {view === "styleDNA" && result && (
+          <StyleDNAScreen
+            result={result}
+            styleDNA={styleDNA}
+            onViewLooks={() => setView("feed")}
+          />
+        )}
+
+        {view === "feed" && (
           <OutfitFeed
-            skinTone={result.skin_tone}
-            onBack={resetAll}
+            skinTone={result?.style_dna?.skin_tone?.tone}
+            styleDNA={styleDNA}
+            onBack={() => setView("home")}
             savedLooks={savedLooks}
             setSavedLooks={setSavedLooks}
+            bodyShape={
+              result?.style_dna?.body_shape?.body_shape
+            }
+            shapeRules={
+              result?.style_dna?.shape_rules
+            }
+
+            onOpenWardrobe={() => setView("wardrobe")}
+            onOpenPalette={() => setView("palette")}
+            onOpenUpload={() => setView("upload")}
           />
         )}
 
@@ -292,7 +339,45 @@ export default function App() {
           />
         )}
 
+        {view === "palette" && (
+          <ColorPaletteScreen
+            skinTone={result?.style_dna?.skin_tone?.tone}
+            onBack={() => setView("home")}
+          />
+        )}
+
       </div>
+
+      <FashionAssistantScreen
+        skinTone={result?.style_dna?.skin_tone}
+        bodyShape={
+          result?.style_dna?.body_shape?.body_shape
+        }
+        styleDNA={styleDNA}
+        onAction={(action) => {
+
+          if (action === "WARDROBE")
+            setView("wardrobe");
+
+          if (action === "FEED")
+            setView("feed");
+
+          if (action === "PALETTE")
+            setView("palette");
+
+          if (action === "UPLOAD")
+            setView("upload");
+
+        }}
+      />
+
+      <BottomNavigation
+        onHome={() => setView("home")}
+        onAnalyze={() => setView("upload")}
+        onWardrobe={() => setView("wardrobe")}
+        onPalette={() => setView("palette")}
+      />
+
     </div>
   );
 }

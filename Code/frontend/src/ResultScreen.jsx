@@ -1,16 +1,19 @@
 import { colors } from "./design-system/colors";
 
 function ResultScreen({ result, onSeeOutfits, onReset }) {
+  
+  console.log(result);
+  
   const bodyShape =
-    result?.body_shape?.body_shape ||
+    result?.style_dna?.body_shape?.body_shape ||
     "Unknown";
 
   const confidence =
-    result?.body_shape?.confidence ||
+    result?.style_dna?.body_shape?.confidence ||
     0;
 
   const measurements =
-    result?.measurements || {};
+    result?.style_dna?.measurements || {};
 
   return (
     <div
@@ -115,8 +118,9 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
           High Accuracy
         </p>
       </div>
-
+      
       {/* Measurements */}
+      {/*
 
       <div
         style={{
@@ -127,6 +131,7 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
           border: `1px solid ${colors.border}`,
         }}
       >
+        
         <h3
           style={{
             color: colors.text,
@@ -135,6 +140,7 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
           }}
         >
           Body Measurements
+        
         </h3>
 
         <div
@@ -168,6 +174,7 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
           </div>
         </div>
       </div>
+      */}
 
       {/* Body Analysis */}
 

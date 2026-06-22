@@ -3,9 +3,26 @@ import cv2
 import numpy as np
 from io import BytesIO
 from PIL import Image
+from dotenv import load_dotenv
 
-from fastapi import FastAPI, UploadFile, File, Query
+load_dotenv()
+from ai.body_analysis.gemini_service import ask_gemini
+
+import shutil
+import uuid
+from ultralytics import YOLO
+
+from fastapi import FastAPI, UploadFile, File, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'ai', 'body_analysis'))
+
+from ai.body_analysis.measurement_estimator import MeasurementEstimator
+from ai.body_analysis.measurement_converter import MeasurementConverter, get_person_height
+from ai.body_analysis.body_shape_detector import BodyShapeDetector
+from ai.body_analysis.profile_generator import ProfileGenerator
 
 app = FastAPI()
 
@@ -13,62 +30,45 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "http://192.168.29.139:5173",
-        "https://smart-fit-ai-six.vercel.app",
+        "http://127.0.0.1:5173"
     ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── OpenCV Face Detection Setup ─────────────────────────────────────────────
 CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
-# ── Face Analysis ────────────────────────────────────────────────────────────
-async def analyse_image_with_opencv(image_bytes: bytes) -> tuple[int, int, int]:
-    """
-    Detect face using OpenCV Haar Cascade (runs locally, completely free).
-    Returns (r, g, b) of the dominant face skin color.
-    Falls back to center pixel if no face detected.
+pose_model = YOLO("yolo11n-pose.pt")
+STYLE_DNA_UPLOAD_DIR = "uploads/style_dna_temp"
+os.makedirs(STYLE_DNA_UPLOAD_DIR, exist_ok=True)
 
-    WHY: OpenCV face detection is battle-tested, runs locally,
-    needs no API key, no billing, no internet. Perfect for deployment.
-    """
+
+async def analyse_image_with_opencv(image_bytes: bytes) -> tuple[int, int, int]:
     try:
         img = Image.open(BytesIO(image_bytes)).convert("RGB")
         img_array = np.array(img)
-
-        # Convert to grayscale for face detection
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-
-        # Detect faces
         faces = face_cascade.detectMultiScale(
             gray,
             scaleFactor=1.1,
             minNeighbors=5,
             minSize=(30, 30)
         )
-
         if len(faces) > 0:
-            # Take the largest face
             x, y, w, h = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)[0]
-
-            # Crop face region
             face_crop = img.crop((x, y, x+w, y+h))
             face_small = face_crop.resize((50, 50))
             pixels = list(face_small.getdata())
-
             r = int(sum(p[0] for p in pixels) / len(pixels))
             g = int(sum(p[1] for p in pixels) / len(pixels))
             b = int(sum(p[2] for p in pixels) / len(pixels))
-
             print(f"Face detected — RGB: ({r}, {g}, {b})")
             return r, g, b
-
     except Exception as e:
         print(f"OpenCV error: {e}")
 
-    # ── Fallback: center pixel ────────────────────────────────────────
     try:
         img = Image.open(BytesIO(image_bytes)).convert("RGB")
         w, h = img.size
@@ -85,11 +85,9 @@ async def analyse_image_with_opencv(image_bytes: bytes) -> tuple[int, int, int]:
         return 194, 154, 108
 
 
-# ── Skin Tone Logic ─────────────────────────────────────────────────────────
 def get_skin_tone(r, g, b):
     brightness = (r + g + b) / 3
     warmth = r - b
-
     if brightness > 200:
         tone = "Fair"
     elif brightness > 170:
@@ -102,14 +100,12 @@ def get_skin_tone(r, g, b):
         tone = "Deep"
     else:
         tone = "Rich"
-
     if warmth > 20:
         undertone = "Warm"
     elif warmth < -20:
         undertone = "Cool"
     else:
         undertone = "Neutral"
-
     return f"{undertone} {tone}"
 
 
@@ -137,7 +133,53 @@ def get_recommended_colors(skin_tone):
     return recommendations.get(skin_tone, ["#264653","#2A9D8F","#E9C46A","#F4A261","#E76F51"])
 
 
-# ── Outfit Dataset ──────────────────────────────────────────────────────────
+def get_style_dna_outfits(skin_tone: str, body_shape: str):
+    SHAPE_RULES = {
+        "Inverted Triangle": {
+            "avoid": ["heavy shoulder details", "boat necks", "puff sleeves"],
+            "prefer": ["wide-leg trousers", "A-line skirts", "V-necks"],
+            "fit_tip": "Balance broad shoulders with volume on the lower half"
+        },
+        "Triangle": {
+            "avoid": ["tapered trousers", "pencil skirts", "tight bottoms"],
+            "prefer": ["structured shoulders", "bold tops", "A-line skirts"],
+            "fit_tip": "Draw attention upward with statement tops"
+        },
+        "Hourglass": {
+            "avoid": ["boxy silhouettes", "oversized everything"],
+            "prefer": ["wrap dresses", "belted waists", "fitted cuts"],
+            "fit_tip": "Emphasise your waist — it is your best asset"
+        },
+        "Rectangle": {
+            "avoid": ["shapeless cuts", "straight up-down silhouettes"],
+            "prefer": ["peplum tops", "belted outfits", "ruffles"],
+            "fit_tip": "Create the illusion of curves with waist definition"
+        },
+        "Oval": {
+            "avoid": ["tight waistbands", "clingy fabrics", "horizontal stripes"],
+            "prefer": ["empire waist", "A-line", "monochrome looks"],
+            "fit_tip": "Vertical lines and A-line silhouettes are most flattering"
+        },
+        "Trapezoid": {
+            "avoid": ["nothing — you have the most versatile shape"],
+            "prefer": ["slim-fit", "tailored cuts", "any silhouette"],
+            "fit_tip": "Athletic build suits almost every style — own it"
+        }
+    }
+    base_outfits = OUTFITS.get(skin_tone, [])
+    shape_rules = SHAPE_RULES.get(body_shape, {})
+    tagged_outfits = []
+    for outfit in base_outfits:
+        outfit_copy = outfit.copy()
+        outfit_copy["body_shape_compatible"] = True
+        outfit_copy["why"] = f"{outfit['tip']} · {shape_rules.get('fit_tip', '')}"
+        tagged_outfits.append(outfit_copy)
+    return {
+        "outfits": tagged_outfits,
+        "shape_rules": shape_rules
+    }
+
+
 OUTFITS = {
     "Warm Fair": [
         {"name": "Peach linen shirt", "style": "Casual", "occasion": "Everyday", "color": "#F4A261", "tip": "Warm peach mirrors your natural glow"},
@@ -268,14 +310,15 @@ OUTFITS = {
 }
 
 
-# ── Routes ──────────────────────────────────────────────────────────────────
 @app.get("/")
 def home():
     return {"message": "SmartFit AI Backend is running!"}
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 @app.post("/analyse")
 async def analyse(file: UploadFile = File(...)):
@@ -289,6 +332,7 @@ async def analyse(file: UploadFile = File(...)):
         "debug_rgb": {"r": r, "g": g, "b": b}
     }
 
+
 @app.get("/outfits")
 def get_outfits(skin_tone: str = Query(...)):
     outfits = OUTFITS.get(skin_tone, [])
@@ -298,4 +342,137 @@ def get_outfits(skin_tone: str = Query(...)):
         "skin_tone": skin_tone,
         "count": len(outfits),
         "outfits": outfits
+    }
+
+
+@app.post("/style-dna")
+async def style_dna(
+    file: UploadFile = File(...),
+    height_cm: float = 170.0
+):
+    allowed = ['.jpg', '.jpeg', '.png', '.webp']
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed:
+        return JSONResponse(status_code=400, content={
+            "status": "error",
+            "code": "INVALID_FILE_TYPE",
+            "message": f"File type {ext} not supported. Use jpg, png, or webp."
+        })
+
+    temp_filename = f"{uuid.uuid4()}{ext}"
+    temp_path = os.path.join(STYLE_DNA_UPLOAD_DIR, temp_filename)
+
+    try:
+        image_bytes = await file.read()
+
+        size_mb = len(image_bytes) / (1024 * 1024)
+        if size_mb > 5:
+            return JSONResponse(status_code=400, content={
+                "status": "error",
+                "code": "FILE_TOO_LARGE",
+                "message": f"File {round(size_mb, 1)}MB exceeds 5MB limit."
+            })
+
+        with open(temp_path, "wb") as f:
+            f.write(image_bytes)
+
+        r, g, b = await analyse_image_with_opencv(image_bytes)
+        skin_tone = get_skin_tone(r, g, b)
+        colour_palette = get_recommended_colors(skin_tone)
+
+        body_shape_result = None
+        body_shape_error = None
+
+        try:
+            results = pose_model(temp_path, verbose=False)
+
+            if results and results[0].keypoints is not None:
+                keypoints = results[0].keypoints.xy[0].tolist()
+
+                critical = {
+                    "Left Shoulder": 5, "Right Shoulder": 6,
+                    "Left Hip": 11, "Right Hip": 12,
+                    "Left Ankle": 15, "Right Ankle": 16
+                }
+                missing = [
+                    name for name, idx in critical.items()
+                    if keypoints[idx][0] == 0 and keypoints[idx][1] == 0
+                ]
+
+                if not missing:
+                    estimator = MeasurementEstimator()
+                    pixel_measurements = estimator.estimate(keypoints)
+
+                    pixel_height = get_person_height(keypoints)
+                    converter = MeasurementConverter(height_cm=height_cm)
+                    measurements_cm = {
+                        key: converter.pixel_to_cm(val, pixel_height)
+                        for key, val in pixel_measurements.items()
+                    }
+
+                    detector = BodyShapeDetector()
+                    body_shape_data = detector.detect(
+                        shoulder_width=pixel_measurements["shoulder_width"],
+                        hip_width=pixel_measurements["hip_width"],
+                        torso_length=pixel_measurements["torso_length"],
+                        leg_length=pixel_measurements["leg_length"],
+                        waist_width=pixel_measurements["waist_width"]
+                    )
+
+                    body_shape_result = {
+                        "body_shape": body_shape_data["body_shape"],
+                        "description": body_shape_data["description"],
+                        "confidence": body_shape_data["confidence"],
+                        "style_tips": body_shape_data["style_tips"],
+                        "ratios": body_shape_data["ratios"],
+                        "measurements_cm": measurements_cm
+                    }
+                else:
+                    body_shape_error = f"Partial body. Missing: {', '.join(missing)}"
+            else:
+                body_shape_error = "No person detected for body shape"
+
+        except Exception as e:
+            body_shape_error = str(e)
+
+        body_shape_name = (
+            body_shape_result["body_shape"]
+            if body_shape_result else "Unknown"
+        )
+
+        outfit_data = get_style_dna_outfits(skin_tone, body_shape_name)
+
+        return JSONResponse(status_code=200, content={
+            "status": "success",
+            "style_dna": {
+                "skin_tone": {
+                    "tone": skin_tone,
+                    "rgb": {"r": r, "g": g, "b": b},
+                    "colour_palette": colour_palette
+                },
+                "body_shape": body_shape_result,
+                "body_shape_error": body_shape_error,
+                "outfit_recommendations": outfit_data["outfits"],
+                "shape_rules": outfit_data["shape_rules"]
+            }
+        })
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "code": "UNEXPECTED_ERROR",
+            "message": str(e)
+        })
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+@app.get("/chat")
+def chat(question: str):
+
+    answer = ask_gemini(question)
+
+    return {
+        "answer": answer
     }

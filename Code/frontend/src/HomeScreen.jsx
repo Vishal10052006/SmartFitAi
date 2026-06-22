@@ -2,9 +2,11 @@ import { colors } from "./design-system/colors";
 
 export default function HomeScreen({
   skinTone,
+  styleDNA,
   onAnalyze,
   onViewLooks,
   onWardrobe,
+  onPalette,
 }) {
   return (
     <div
@@ -36,8 +38,6 @@ export default function HomeScreen({
         >
           Welcome To SmartFit AI
 
-          Discover the colors, outfits,
-          and fashion styles that suit you best.
         </h2>
 
         <p
@@ -48,8 +48,7 @@ export default function HomeScreen({
             fontSize: "14px",
           }}
         >
-          Discover the colors, outfits,
-          and fashion styles that suit you best.
+          Know your best suited clothes based on your body shape, skin tone and Style DNA.
           <br />
           <br />
         </p>
@@ -75,6 +74,29 @@ export default function HomeScreen({
         >
           Your Style Profile
         </h3>
+
+        <p
+          style={{
+            color: "#6C63FF",
+            textAlign: "center",
+            fontWeight: "700",
+            fontSize: "16px",
+            marginBottom: "16px",
+          }}
+        >
+          {styleDNA?.styleIdentity || "No Style DNA Yet"}
+        </p>
+
+        <p
+          style={{
+            color: "#B3B7C2",
+            textAlign: "center",
+            fontSize: "13px",
+            marginBottom: "20px",
+          }}
+        >
+          {styleDNA?.fitPreference}
+        </p>
 
         <div
           style={{
@@ -165,11 +187,11 @@ export default function HomeScreen({
       {/* Secondary Action */}
 
       <button
-        onClick={onViewLooks}
+        onClick={onPalette}
         style={{
-          background: "#1F2937",
+          background: "#0F172A",
           color: "#FFFFFF",
-          border: "none",
+          border: "1px solid #6C63FF",
           borderRadius: "18px",
           padding: "18px",
           fontWeight: "700",
@@ -177,7 +199,7 @@ export default function HomeScreen({
           cursor: "pointer",
         }}
       >
-        Generate Looks
+        🎨 View My Colors
       </button>
 
       {/* Recommended For You */}
@@ -309,59 +331,7 @@ export default function HomeScreen({
           <div>Virtual Try-On</div>
           <div>Smart Wardrobe</div>
         </div>
-      </div>
-
-      {/* Bottom Navigation */}
-
-      <div
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: "90%",
-          maxWidth: "420px",
-          background: "#111827",
-          border: `1px solid ${colors.border}`,
-          borderRadius: "20px",
-          padding: "16px",
-          display: "flex",
-          justifyContent: "space-around",
-          color: "#FFFFFF",
-          zIndex: 1000,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-        }}
-      >
-        <div
-          style={{
-            background: "#111827",
-            border: `1px solid ${colors.border}`,
-            borderRadius: "20px",
-            padding: "16px",
-            display: "flex",
-            justifyContent: "space-around",
-            color: "#FFFFFF",
-            marginBottom: "20px",
-          }}
-        >
-          <div>🏠 Home</div>
-
-          <div
-            onClick={onAnalyze}
-            style={{ cursor: "pointer" }}
-          >
-            📷 Analyze
-          </div>
-
-          <div
-            onClick={onWardrobe}
-            style={{ cursor: "pointer" }}
-          >
-            👕 Wardrobe
-          </div>
-
-          <div>👤 Profile</div>
-        </div>
+        
       </div>
     </div>
   );

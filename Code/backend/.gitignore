@@ -1,1 +1,24 @@
 vision-key.json
+
+.env
+
+# ML Model Data - never commit these
+Code/yolo11n-pose/
+*.pkl
+byteorder
+serialization_id
+data/
+
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store
