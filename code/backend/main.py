@@ -24,6 +24,9 @@ from ai.body_analysis.measurement_converter import MeasurementConverter, get_per
 from ai.body_analysis.body_shape_detector import BodyShapeDetector
 from ai.body_analysis.profile_generator import ProfileGenerator
 
+from auth.supabase_client import get_supabase
+from auth.routes import router as auth_router
+
 app = FastAPI()
 
 app.add_middleware(
@@ -36,6 +39,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
