@@ -16,6 +16,9 @@ import StyleDNAScreen from "./StyleDNAScreen";
 import detectIntent from "./ai/assistant/detectIntent";
 import FashionAssistantScreen from "./FashionAssistantScreen";
 
+import { useAuth } from "./auth/AuthContext";
+import AuthScreen from "./auth/AuthScreen";
+
 console.log(
   "TEST",
   detectIntent("Open wardrobe")
@@ -29,8 +32,9 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savedLooks, setSavedLooks] = useState([]);
-  
   const [styleDNA, setStyleDNA] = useState(null);
+
+  const { isAuthenticated, accessToken, logout } = useAuth();
   
   const handleUpload = (e) => {
     const file = e.target.files[0];
@@ -57,12 +61,23 @@ export default function App() {
         `${import.meta.env.VITE_API_URL}/style-dna`,
         {
           method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,   // 👈 ADDED
+          },
           body: formData,
         }
       );
 
       if (!res.ok) {
         const errorText = await res.text();
+
+        // 👇 ADDED — if token expired/invalid mid-session, force re-login
+        // instead of showing a confusing raw 401 JSON to the user
+        if (res.status === 401) {
+          logout();
+          return;
+        }
+
         throw new Error(errorText);
       }
 
@@ -162,6 +177,10 @@ export default function App() {
     );
   }
 
+  if (!isAuthenticated) {
+    return <AuthScreen />;
+  }
+
   return (
     <div
       style={{
@@ -186,6 +205,7 @@ export default function App() {
           padding: "18px 20px 14px",
           textAlign: "center",
           borderBottom: `1px solid ${colors.border}`,
+          position: "relative",
         }}
       >
         <p
@@ -377,6 +397,49 @@ export default function App() {
         onWardrobe={() => setView("wardrobe")}
         onPalette={() => setView("palette")}
       />
+
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          width: "100%",
+          background: colors.background,
+          padding: "18px 20px 14px",
+          borderBottom: `1px solid ${colors.border}`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <div style={{ flex: 1 }} />
+
+        <div style={{ textAlign: "center" }}>
+          <p style={{ color: colors.textSecondary, fontSize: "12px", marginBottom: "6px" }}>
+            Your Personal AI Stylist Kiara.
+          </p>
+          <h1 style={{ fontSize: "24px", fontWeight: "800", letterSpacing: "-0.6px", margin: 0 }}>
+            SmartFit <span style={{ color: colors.primary }}>AI</span>
+          </h1>
+        </div>
+
+        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={logout}
+            style={{
+              background: "transparent",
+              border: `1px solid ${colors.border}`,
+              color: colors.textSecondary,
+              borderRadius: "12px",
+              padding: "6px 12px",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            Log Out
+          </button>
+        </div>
+      </div>
 
     </div>
   );

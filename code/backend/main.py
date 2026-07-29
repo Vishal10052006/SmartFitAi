@@ -12,7 +12,7 @@ import shutil
 import uuid
 from ultralytics import YOLO
 
-from fastapi import FastAPI, UploadFile, File, Query, Form
+from fastapi import FastAPI, UploadFile, File, Query, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -26,6 +26,7 @@ from ai.body_analysis.profile_generator import ProfileGenerator
 
 from auth.supabase_client import get_supabase
 from auth.routes import router as auth_router
+from auth.dependencies import get_current_user
 
 app = FastAPI()
 
@@ -353,7 +354,8 @@ def get_outfits(skin_tone: str = Query(...)):
 @app.post("/style-dna")
 async def style_dna(
     file: UploadFile = File(...),
-    height_cm: float = 170.0
+    height_cm: float = 170.0,
+    user = Depends(get_current_user)
 ):
     allowed = ['.jpg', '.jpeg', '.png', '.webp']
     ext = os.path.splitext(file.filename)[1].lower()

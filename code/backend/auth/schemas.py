@@ -1,7 +1,3 @@
-"""
-Path: Code/backend/auth/schemas.py
-"""
-
 from pydantic import BaseModel, EmailStr, Field
 
 

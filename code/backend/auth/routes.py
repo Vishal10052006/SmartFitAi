@@ -1,10 +1,7 @@
-"""
-Path: Code/backend/auth/routes.py
-"""
-
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from auth.supabase_client import get_supabase
 from auth.schemas import SignUpRequest, LoginRequest, AuthResponse
+from auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -61,3 +58,18 @@ async def login(payload: LoginRequest):
         access_token=result.session.access_token,
         refresh_token=result.session.refresh_token,
     )
+
+
+@router.get("/me")
+async def get_me(user = Depends(get_current_user)):
+    """
+    Returns the authenticated user's info based on their access token.
+    Protected route — used both as a real endpoint and as the
+    reference implementation for how to protect any other route.
+    """
+    return {
+        "status": "success",
+        "user_id": user.id,
+        "email": user.email,
+        "created_at": str(user.created_at) if user.created_at else None,
+    }
