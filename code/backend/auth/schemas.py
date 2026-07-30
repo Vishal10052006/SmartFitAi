@@ -11,6 +11,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
 class AuthResponse(BaseModel):
     status: str
     user_id: str | None = None

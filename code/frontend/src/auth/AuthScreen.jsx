@@ -4,6 +4,7 @@ import { useAuth } from "./AuthContext";
 
 function AuthScreen() {
   const { login, signup } = useAuth();
+  const { loginWithGoogle } = useAuth();
 
   const [mode, setMode] = useState("login"); // "login" | "signup"
   const [email, setEmail] = useState("");
@@ -12,10 +13,55 @@ function AuthScreen() {
   const [error, setError] = useState(null);
   const [confirmationMessage, setConfirmationMessage] = useState(null);
 
+
+  async function handleGoogleLogin() {
+    setError(null);
+    try {
+      await loginWithGoogle();
+      // No further code runs here — browser navigates away to Google
+    } catch (err) {
+      setError(err.message || "Google login failed");
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      setError("Enter your email above first, then click 'Forgot password?'");
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/auth/forgot-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        }
+      );
+      const data = await res.json();
+
+      setConfirmationMessage(data.message);
+    } catch {
+      setError("Something went wrong sending the reset email.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
     setConfirmationMessage(null);
+
+    if (mode === "signup" && password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -225,6 +271,44 @@ function AuthScreen() {
               : "Sign Up"}
           </button>
         </div>
+
+        {mode === "login" && (
+          <p
+            onClick={handleForgotPassword}
+            style={{
+              textAlign: "center",
+              marginTop: "14px",
+              color: colors.primary,
+              fontSize: "13px",
+              cursor: "pointer",
+            }}
+          >
+            Forgot password?
+          </p>
+        )}
+
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "20px 0" }}>
+          <div style={{ flex: 1, height: "1px", background: colors.border }} />
+          <span style={{ color: colors.textSecondary, fontSize: "12px" }}>OR</span>
+          <div style={{ flex: 1, height: "1px", background: colors.border }} />
+        </div>
+
+        <button
+          onClick={handleGoogleLogin}
+          style={{
+            width: "100%",
+            background: colors.card,
+            color: colors.text,
+            border: `1px solid ${colors.border}`,
+            padding: "14px",
+            borderRadius: "16px",
+            fontWeight: "600",
+            fontSize: "14px",
+            cursor: "pointer",
+          }}
+        >
+          Continue with Google
+        </button>
 
         {/* Toggle mode */}
         <p

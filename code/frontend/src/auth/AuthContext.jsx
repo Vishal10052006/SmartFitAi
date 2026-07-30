@@ -1,5 +1,10 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 
+const supabaseBrowser = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 // WHY CONTEXT INSTEAD OF PROP DRILLING:
 // Auth state (token, user) is needed in App.jsx (to gate the whole app)
 // AND deep in any component that calls a protected endpoint. Passing it
@@ -92,6 +97,57 @@ export function AuthProvider({ children }) {
     setAuth(null);
   }
 
+  // Supabase's browser client automatically detects and exchanges the
+  // OAuth code in the URL on page load (detectSessionInUrl: true by
+  // default). We don't need to do that exchange manually — we just
+  // need to listen for the session it produces and sync it into our
+  // own auth state.
+  useEffect(() => {
+    // Check if Supabase already has a session (covers page load after redirect)
+    supabaseBrowser.auth.getSession().then(({ data }) => {
+      if (data?.session) {
+        setAuth({
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+          email: data.session.user?.email || null,
+          userId: data.session.user?.id || null,
+        });
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    });
+
+    // Also listen for future auth state changes (login, logout, token refresh)
+    const { data: listener } = supabaseBrowser.auth.onAuthStateChange(
+      (event, session) => {
+        if (session) {
+          setAuth({
+            accessToken: session.access_token,
+            refreshToken: session.refresh_token,
+            email: session.user?.email || null,
+            userId: session.user?.id || null,
+          });
+        }
+      }
+    );
+
+    return () => {
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  async function loginWithGoogle() {
+    const { error } = await supabaseBrowser.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+
   const value = {
     isAuthenticated: !!auth?.accessToken,
     accessToken: auth?.accessToken || null,
@@ -100,6 +156,7 @@ export function AuthProvider({ children }) {
     signup,
     login,
     logout,
+    loginWithGoogle,
   };
 
   return (
