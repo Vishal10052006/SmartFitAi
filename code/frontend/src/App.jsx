@@ -7,6 +7,7 @@ import UploadScreen from "./UploadScreen";
 import ResultScreen from "./ResultScreen";
 import OutfitFeed from "./OutfitFeed";
 import HomeScreen from "./HomeScreen";
+import OnboardingScreen from "./OnboardingScreen";
 
 import WardrobeScreen from "./WardrobeScreen";
 import buildStyleDNA from "./ai/styleDNA/buildStyleDNA";
@@ -34,8 +35,19 @@ export default function App() {
   const [savedLooks, setSavedLooks] = useState([]);
   const [styleDNA, setStyleDNA] = useState(null);
 
-  const { isAuthenticated, accessToken, logout } = useAuth();
-  
+  const { isAuthenticated, accessToken, logout, userId } = useAuth();
+
+  const [onboardingComplete, setOnboardingComplete] = useState(() => {
+    if (!userId) return false;
+    return localStorage.getItem(`smartfit-onboarded-${userId}`) === "true";
+  });
+
+  const [onboardingAnswers, setOnboardingAnswers] = useState(() => {
+    if (!userId) return {};
+    const saved = localStorage.getItem(`smartfit-answers-${userId}`);
+    return saved ? JSON.parse(saved) : {};
+  });
+
   const handleUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -45,24 +57,30 @@ export default function App() {
   };
 
   const analyzeBody = async () => {
-
     if (!image) return;
 
     setLoading(true);
     setError(null);
 
     try {
-
       const formData = new FormData();
-
       formData.append("file", image);
+
+      // T2.4 fix: previously this never sent height, so the backend
+      // silently defaulted to 170cm for every user. Now it sends the
+      // real onboarding value, falling back to 170 only if the user
+      // explicitly skipped that step.
+      const heightCm = onboardingAnswers.height
+        ? Number(onboardingAnswers.height)
+        : 170;
+      formData.append("height_cm", heightCm);
 
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/style-dna`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${accessToken}`,   // 👈 ADDED
+            Authorization: `Bearer ${accessToken}`,
           },
           body: formData,
         }
@@ -71,7 +89,7 @@ export default function App() {
       if (!res.ok) {
         const errorText = await res.text();
 
-        // 👇 ADDED — if token expired/invalid mid-session, force re-login
+        // if token expired/invalid mid-session, force re-login
         // instead of showing a confusing raw 401 JSON to the user
         if (res.status === 401) {
           logout();
@@ -179,6 +197,23 @@ export default function App() {
 
   if (!isAuthenticated) {
     return <AuthScreen />;
+  }
+
+  if (!onboardingComplete) {
+    return (
+      <OnboardingScreen
+        onComplete={(answers) => {
+          setOnboardingAnswers(answers);
+          if (userId) {
+            localStorage.setItem(`smartfit-onboarded-${userId}`, "true");
+            // Store the raw answers too, so height/weight survive a refresh
+            // (this is a stopgap — T2.6 replaces it with a real Supabase save)
+            localStorage.setItem(`smartfit-answers-${userId}`, JSON.stringify(answers));
+          }
+          setOnboardingComplete(true);
+        }}
+      />
+    );
   }
 
   return (
