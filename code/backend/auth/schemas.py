@@ -22,3 +22,23 @@ class AuthResponse(BaseModel):
     access_token: str | None = None
     refresh_token: str | None = None
     message: str | None = None
+
+
+class ProfileUpdate(BaseModel):
+    """Payload the frontend sends when onboarding completes (or later,
+    when a Settings screen exists, when the user edits their answers)."""
+    onboarding_complete: bool = True
+    gender: str | None = None
+    age: int | None = None
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    lifestyle: list[str] | None = None
+
+
+class ProfileResponse(BaseModel):
+    onboarding_complete: bool
+    gender: str | None = None
+    age: int | None = None
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    lifestyle: list[str] | None = None

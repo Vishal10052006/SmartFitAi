@@ -6,17 +6,20 @@ import kiaraAvatar from "./assets/kiara-avatar.png";
  * T2.1 — Onboarding flow architecture & routing (done)
  * T2.2 — Kiara persistent header + dialogue per step (done)
  * T2.3 — Gender & Age capture (done)
- * T2.4 — Height & Weight capture (this update)
+ * T2.4 — Height & Weight capture (done)
+ * T2.5 — Lifestyle capture (this update)
  *
- * IMPORTANT: this is the task that actually matters for correctness.
- * Height feeds MeasurementConverter on the backend — up to now App.jsx
- * never sent a real value, so every user got body-shape math computed
- * off a hardcoded 170cm default. This update captures a real height
- * here; App.jsx.PATCH-T2.4.md wires it into the actual /style-dna call.
+ * Onboarding is now 7 steps — Fashion Goals was removed entirely per
+ * product decision, not deferred. If it comes back later it needs a
+ * new task, not a silent re-add here.
  *
- * Height/Weight stay skippable like Gender/Age (same product decision),
- * but if height is skipped, App.jsx still needs a documented fallback —
- * see the patch notes for how that's handled.
+ * Lifestyle is multi-select (user can pick more than one). Values still
+ * match buildStyleDNA.js's occasionPreference options exactly
+ * (College/Office/Party/Travel), but since buildStyleDNA only accepts
+ * ONE occasionPreference, App.jsx uses the FIRST selected value as
+ * primary and stores the full array for future use. That's a documented
+ * stopgap, not a real multi-lifestyle recommendation engine — building
+ * that properly is a separate product decision.
  */
 
 const KIARA_LINES = {
@@ -47,10 +50,6 @@ const KIARA_LINES = {
   lifestyle: {
     heading: "Let's talk about your day-to-day",
     body: "Office? Campus? Always out? This shapes what I actually recommend you wear.",
-  },
-  fashionGoals: {
-    heading: "Last one — what are you going for?",
-    body: "Tell me what you want more of, and I'll aim every recommendation at it.",
   },
 };
 
@@ -105,18 +104,7 @@ function GenderBody({ value, onChange }) {
           <button
             key={opt}
             onClick={() => onChange(selected ? null : opt)}
-            style={{
-              padding: "14px 18px",
-              borderRadius: 14,
-              border: `1px solid ${selected ? colors.primary : colors.border}`,
-              background: selected ? "rgba(108,99,255,0.15)" : colors.card,
-              color: selected ? colors.primary : colors.text,
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: "pointer",
-              textAlign: "left",
-              transition: "all 0.15s ease",
-            }}
+            style={choiceBtnStyle(selected)}
           >
             {opt}
           </button>
@@ -142,7 +130,6 @@ function AgeBody({ value, onChange, error }) {
   );
 }
 
-// ---------- STEP BODY: Height ----------
 function HeightBody({ value, onChange, error }) {
   return (
     <div style={{ marginBottom: 24 }}>
@@ -162,7 +149,6 @@ function HeightBody({ value, onChange, error }) {
   );
 }
 
-// ---------- STEP BODY: Weight ----------
 function WeightBody({ value, onChange, error }) {
   return (
     <div style={{ marginBottom: 24 }}>
@@ -182,24 +168,73 @@ function WeightBody({ value, onChange, error }) {
   );
 }
 
-function PlaceholderBody({ label }) {
+// ---------- STEP BODY: Lifestyle ----------
+// Values match buildStyleDNA.js's occasionPreference switch exactly:
+// "College" | "Office" | "Party" | "Travel"
+const LIFESTYLE_OPTIONS = [
+  { value: "College", label: "Campus / College" },
+  { value: "Office", label: "Office / Corporate" },
+  { value: "Party", label: "Social / Party" },
+  { value: "Travel", label: "Travel / Explorer" },
+];
+
+function LifestyleBody({ value, onChange }) {
+  const selectedValues = value || [];
+
+  function toggle(optValue) {
+    if (selectedValues.includes(optValue)) {
+      onChange(selectedValues.filter((v) => v !== optValue));
+    } else {
+      onChange([...selectedValues, optValue]);
+    }
+  }
+
   return (
-    <div
-      style={{
-        background: colors.card,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 16,
-        padding: "24px",
-        textAlign: "center",
-        marginBottom: 24,
-      }}
-    >
-      <p style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 8 }}>
-        [Input UI — built in a later task]
-      </p>
-      <p style={{ color: colors.text, fontWeight: 600 }}>{label}</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+      {LIFESTYLE_OPTIONS.map((opt) => {
+        const isSelected = selectedValues.includes(opt.value);
+        return (
+          <button key={opt.value} onClick={() => toggle(opt.value)} style={choiceBtnStyle(isSelected)}>
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 5,
+                  border: `2px solid ${isSelected ? colors.primary : colors.textSecondary}`,
+                  background: isSelected ? colors.primary : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 11,
+                  color: "#fff",
+                  flexShrink: 0,
+                }}
+              >
+                {isSelected ? "✓" : ""}
+              </span>
+              {opt.label}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
+}
+
+function choiceBtnStyle(selected) {
+  return {
+    padding: "14px 18px",
+    borderRadius: 14,
+    border: `1px solid ${selected ? colors.primary : colors.border}`,
+    background: selected ? "rgba(108,99,255,0.15)" : colors.card,
+    color: selected ? colors.primary : colors.text,
+    fontWeight: 600,
+    fontSize: 14,
+    cursor: "pointer",
+    textAlign: "left",
+    transition: "all 0.15s ease",
+  };
 }
 
 const numInputStyle = (error) => ({
@@ -230,6 +265,26 @@ const errorTextStyle = {
   marginTop: 8,
   textAlign: "center",
 };
+
+function PlaceholderBody({ label }) {
+  return (
+    <div
+      style={{
+        background: colors.card,
+        border: `1px solid ${colors.border}`,
+        borderRadius: 16,
+        padding: "24px",
+        textAlign: "center",
+        marginBottom: 24,
+      }}
+    >
+      <p style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 8 }}>
+        [Unrecognized step — check STEPS registry]
+      </p>
+      <p style={{ color: colors.text, fontWeight: 600 }}>{label}</p>
+    </div>
+  );
+}
 
 function validateAge(raw) {
   if (raw === "" || raw === null || raw === undefined) return null;
@@ -264,7 +319,6 @@ const STEPS = [
   { key: "height", label: "Height", skippable: true },
   { key: "weight", label: "Weight", skippable: true },
   { key: "lifestyle", label: "Lifestyle", skippable: true },
-  { key: "fashionGoals", label: "Fashion Goals", skippable: true },
 ];
 
 export default function OnboardingScreen({ onComplete }) {
@@ -307,6 +361,7 @@ export default function OnboardingScreen({ onComplete }) {
     if (step.key === "age") updateAnswers({ age: null });
     if (step.key === "height") updateAnswers({ height: null });
     if (step.key === "weight") updateAnswers({ weight: null });
+    if (step.key === "lifestyle") updateAnswers({ lifestyle: [] });
     goNext();
   }
 
@@ -324,6 +379,8 @@ export default function OnboardingScreen({ onComplete }) {
         return <HeightBody value={answers.height} onChange={(v) => updateAnswers({ height: v })} error={fieldErrors.height} />;
       case "weight":
         return <WeightBody value={answers.weight} onChange={(v) => updateAnswers({ weight: v })} error={fieldErrors.weight} />;
+      case "lifestyle":
+        return <LifestyleBody value={answers.lifestyle} onChange={(v) => updateAnswers({ lifestyle: v })} />;
       case "welcome":
       case "meetKiara":
         return null;

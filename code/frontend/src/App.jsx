@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import BottomNavigation from "./BottomNavigation";
 
 import { colors } from "./design-system/colors";
@@ -37,16 +37,67 @@ export default function App() {
 
   const { isAuthenticated, accessToken, logout, userId } = useAuth();
 
-  const [onboardingComplete, setOnboardingComplete] = useState(() => {
-    if (!userId) return false;
-    return localStorage.getItem(`smartfit-onboarded-${userId}`) === "true";
-  });
+  // T2.6: onboarding status now comes from the backend, not localStorage.
+  // `null` = "haven't checked yet" (shows a brief loading state instead
+  // of flashing onboarding before we know). localStorage below is only
+  // a fallback if the profile fetch itself fails.
+  const [onboardingComplete, setOnboardingComplete] = useState(null);
+  const [onboardingAnswers, setOnboardingAnswers] = useState({});
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  const [onboardingAnswers, setOnboardingAnswers] = useState(() => {
-    if (!userId) return {};
-    const saved = localStorage.getItem(`smartfit-answers-${userId}`);
-    return saved ? JSON.parse(saved) : {};
-  });
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken) {
+      setProfileLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadProfile() {
+      setProfileLoading(true);
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/profile`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (!res.ok) throw new Error("Profile fetch failed");
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        setOnboardingComplete(data.onboarding_complete);
+        setOnboardingAnswers({
+          gender: data.gender,
+          age: data.age,
+          height: data.height_cm,
+          weight: data.weight_kg,
+          lifestyle: data.lifestyle || [],
+        });
+      } catch (err) {
+        // Backend unreachable / profile fetch failed — fall back to
+        // the localStorage cache from before T2.6 so returning users
+        // on this same browser don't get stuck re-onboarding due to
+        // a transient network issue.
+        console.warn("Profile fetch failed, falling back to localStorage:", err);
+        if (cancelled) return;
+
+        const cachedComplete =
+          userId && localStorage.getItem(`smartfit-onboarded-${userId}`) === "true";
+        const cachedAnswersRaw =
+          userId && localStorage.getItem(`smartfit-answers-${userId}`);
+
+        setOnboardingComplete(!!cachedComplete);
+        setOnboardingAnswers(cachedAnswersRaw ? JSON.parse(cachedAnswersRaw) : {});
+      } finally {
+        if (!cancelled) setProfileLoading(false);
+      }
+    }
+
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, accessToken, userId]);
 
   const handleUpload = (e) => {
     const file = e.target.files[0];
@@ -67,9 +118,7 @@ export default function App() {
       formData.append("file", image);
 
       // T2.4 fix: previously this never sent height, so the backend
-      // silently defaulted to 170cm for every user. Now it sends the
-      // real onboarding value, falling back to 170 only if the user
-      // explicitly skipped that step.
+      // silently defaulted to 170cm for every user.
       const heightCm = onboardingAnswers.height
         ? Number(onboardingAnswers.height)
         : 170;
@@ -89,8 +138,6 @@ export default function App() {
       if (!res.ok) {
         const errorText = await res.text();
 
-        // if token expired/invalid mid-session, force re-login
-        // instead of showing a confusing raw 401 JSON to the user
         if (res.status === 401) {
           logout();
           return;
@@ -103,9 +150,14 @@ export default function App() {
 
       setResult(data);
 
+      // T2.5 fix: previously hardcoded to "College". Lifestyle is
+      // multi-select — using the first selected value as primary.
+      const primaryLifestyle =
+        onboardingAnswers.lifestyle?.[0] || "College";
+
       const generatedDNA = buildStyleDNA({
         stylePreference: "Smart Casual",
-        occasionPreference: "College"
+        occasionPreference: primaryLifestyle,
       });
 
       setStyleDNA(generatedDNA);
@@ -137,7 +189,46 @@ export default function App() {
     setView("upload");
   };
 
-  // Loading Screen
+  // T2.6: save onboarding answers to the backend. localStorage write
+  // stays as a fallback cache only — if this PUT fails, we still flip
+  // onboardingComplete locally so the user isn't stuck, but the next
+  // fetch (new device, cleared cache) would show onboarding again since
+  // the server never actually got it. Logged clearly so it's debuggable.
+  async function completeOnboarding(answers) {
+    setOnboardingAnswers(answers);
+
+    if (userId) {
+      localStorage.setItem(`smartfit-onboarded-${userId}`, "true");
+      localStorage.setItem(`smartfit-answers-${userId}`, JSON.stringify(answers));
+    }
+
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL}/auth/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          onboarding_complete: true,
+          gender: answers.gender ?? null,
+          age: answers.age ? Number(answers.age) : null,
+          height_cm: answers.height ? Number(answers.height) : null,
+          weight_kg: answers.weight ? Number(answers.weight) : null,
+          lifestyle: answers.lifestyle ?? [],
+        }),
+      });
+    } catch (err) {
+      console.error(
+        "Failed to save onboarding profile to backend — saved to localStorage only:",
+        err
+      );
+    }
+
+    setOnboardingComplete(true);
+  }
+
+  // Loading Screen (photo analysis)
 
   if (loading) {
     return (
@@ -199,21 +290,42 @@ export default function App() {
     return <AuthScreen />;
   }
 
-  if (!onboardingComplete) {
+  // T2.6: brief loading state while we check the backend for onboarding
+  // status — prevents a flash of the onboarding flow for returning
+  // users whose profile just hasn't loaded yet.
+  if (profileLoading) {
     return (
-      <OnboardingScreen
-        onComplete={(answers) => {
-          setOnboardingAnswers(answers);
-          if (userId) {
-            localStorage.setItem(`smartfit-onboarded-${userId}`, "true");
-            // Store the raw answers too, so height/weight survive a refresh
-            // (this is a stopgap — T2.6 replaces it with a real Supabase save)
-            localStorage.setItem(`smartfit-answers-${userId}`, JSON.stringify(answers));
-          }
-          setOnboardingComplete(true);
+      <div
+        style={{
+          minHeight: "100vh",
+          background: colors.background,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
-      />
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            border: `3px solid ${colors.border}`,
+            borderTop: `3px solid ${colors.primary}`,
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite",
+          }}
+        />
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
     );
+  }
+
+  if (!onboardingComplete) {
+    return <OnboardingScreen onComplete={completeOnboarding} />;
   }
 
   return (

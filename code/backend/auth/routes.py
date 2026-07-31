@@ -1,6 +1,13 @@
 from fastapi import APIRouter, HTTPException, Depends
-from auth.supabase_client import get_supabase
-from auth.schemas import SignUpRequest, LoginRequest, ForgotPasswordRequest, AuthResponse
+from auth.supabase_client import get_supabase, get_supabase_admin
+from auth.schemas import (
+    SignUpRequest,
+    LoginRequest,
+    ForgotPasswordRequest,
+    AuthResponse,
+    ProfileUpdate,
+    ProfileResponse,
+)
 from auth.dependencies import get_current_user
 
 from auth.rate_limiter import limiter
@@ -105,15 +112,6 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
 async def google_oauth_url():
     """
     Returns the Google OAuth URL for the frontend to redirect the browser to.
-
-    FLOW:
-    1. Frontend calls this endpoint
-    2. Frontend does window.location.href = returned URL
-    3. User authenticates with Google
-    4. Google redirects to Supabase's callback (registered in Google Console)
-    5. Supabase creates/finds the user, then redirects to FRONTEND_URL
-       with access_token + refresh_token in the URL fragment (#...)
-    6. Frontend reads the fragment and stores the session (see AuthContext update below)
     """
     supabase = get_supabase()
 
@@ -138,3 +136,75 @@ async def get_me(user = Depends(get_current_user)):
         "email": user.email,
         "created_at": str(user.created_at) if user.created_at else None,
     }
+
+
+# WHY get_supabase_admin() HERE: these routes write to a table keyed by
+# the authenticated user's own id (validated via get_current_user), so
+# there's no cross-user risk. Using the service key avoids a second
+# round-trip to set up an RLS-scoped client per request. RLS policies
+# in the migration are a safety net if this table is ever queried from
+# a different code path — not the primary access control here.
+
+@router.get("/profile", response_model=ProfileResponse)
+async def get_profile(user = Depends(get_current_user)):
+    supabase = get_supabase_admin()
+
+    # NOTE: postgrest-py's .maybe_single() raises an APIError
+    # ("Missing response") instead of returning None when zero rows
+    # match, because Supabase returns an empty 204 for that case and
+    # this client version doesn't handle it gracefully. A missing
+    # profile is not a server error — it just means the user hasn't
+    # completed onboarding yet — so we catch it explicitly rather than
+    # letting it surface as a 500.
+    try:
+        result = (
+            supabase.table("user_profiles")
+            .select("*")
+            .eq("user_id", user.id)
+            .maybe_single()
+            .execute()
+        )
+        row = result.data
+    except Exception:
+        row = None
+
+    if row is None:
+        return ProfileResponse(onboarding_complete=False)
+
+    return ProfileResponse(
+        onboarding_complete=row.get("onboarding_complete", False),
+        gender=row.get("gender"),
+        age=row.get("age"),
+        height_cm=row.get("height_cm"),
+        weight_kg=row.get("weight_kg"),
+        lifestyle=row.get("lifestyle"),
+    )
+
+
+@router.put("/profile", response_model=ProfileResponse)
+async def update_profile(payload: ProfileUpdate, user = Depends(get_current_user)):
+    supabase = get_supabase_admin()
+
+    row = {
+        "user_id": user.id,
+        "onboarding_complete": payload.onboarding_complete,
+        "gender": payload.gender,
+        "age": payload.age,
+        "height_cm": payload.height_cm,
+        "weight_kg": payload.weight_kg,
+        "lifestyle": payload.lifestyle,
+    }
+
+    try:
+        supabase.table("user_profiles").upsert(row).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save profile: {e}")
+
+    return ProfileResponse(
+        onboarding_complete=payload.onboarding_complete,
+        gender=payload.gender,
+        age=payload.age,
+        height_cm=payload.height_cm,
+        weight_kg=payload.weight_kg,
+        lifestyle=payload.lifestyle,
+    )
