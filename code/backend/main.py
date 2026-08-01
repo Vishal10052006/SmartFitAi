@@ -513,8 +513,6 @@ async def style_dna(
 
         outfit_data = get_style_dna_outfits(skin_tone, body_shape_name)
 
-
-        print(f"DEBUG unified_confidence = {unified_confidence}")
         user_id = user.id
         try:
             admin = get_supabase_admin()

@@ -8,12 +8,28 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
     result?.style_dna?.body_shape?.body_shape ||
     "Unknown";
 
-  const confidence =
-    result?.style_dna?.body_shape?.confidence ||
-    0;
-
   const measurements =
     result?.style_dna?.measurements || {};
+
+  // Pull the unified confidence engine result — falls back gracefully
+  // if it's missing (e.g. old cached result, or body shape detection failed
+  // and unified_confidence was never computed on the backend).
+  const confidenceData = result?.style_dna?.confidence;
+
+  const confidenceScore = confidenceData?.overall_confidence ?? null;
+  const confidenceLabel = confidenceData?.label ?? "Confidence Unavailable";
+
+  // Map label bands to colors so the UI visually reflects trust level,
+  // not just a static green "High Accuracy" regardless of the score.
+  function getConfidenceColor(score) {
+    if (score === null) return colors.textSecondary;
+    if (score >= 85) return colors.success;
+    if (score >= 65) return colors.primary;
+    if (score >= 45) return colors.warning;
+    return colors.error;
+  }
+
+  const confidenceColor = getConfidenceColor(confidenceScore);
 
   return (
     <div
@@ -100,81 +116,55 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
 
         <h2
           style={{
-            color: colors.primary,
+            color: confidenceColor,
             margin: 0,
             fontSize: "42px",
           }}
         >
-          {confidence}%
+          {confidenceScore !== null ? `${confidenceScore}%` : "—"}
         </h2>
 
         <p
           style={{
-            color: colors.success,
+            color: confidenceColor,
             marginTop: "8px",
             fontWeight: "600",
           }}
         >
-          High Accuracy
+          {confidenceLabel}
         </p>
+
+        {/* Optional breakdown — only render if the backend sent it */}
+        {confidenceData?.breakdown && (
+          <div
+            style={{
+              marginTop: "16px",
+              paddingTop: "16px",
+              borderTop: `1px solid ${colors.border}`,
+              textAlign: "left",
+              fontSize: "12px",
+              color: colors.textSecondary,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+              <span>Image Quality</span>
+              <span>{confidenceData.breakdown.image_quality}%</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+              <span>Face Detection</span>
+              <span>{confidenceData.breakdown.face_detection}%</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+              <span>Pose Detection</span>
+              <span>{confidenceData.breakdown.pose_detection}%</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Body Shape Match</span>
+              <span>{confidenceData.breakdown.body_shape}%</span>
+            </div>
+          </div>
+        )}
       </div>
-      
-      {/* Measurements */}
-      {/*
-
-      <div
-        style={{
-          background: colors.card,
-          borderRadius: "24px",
-          padding: "24px",
-          marginBottom: "20px",
-          border: `1px solid ${colors.border}`,
-        }}
-      >
-        
-        <h3
-          style={{
-            color: colors.text,
-            marginBottom: "18px",
-            textAlign: "center",
-          }}
-        >
-          Body Measurements
-        
-        </h3>
-
-        <div
-          style={{
-            display: "grid",
-            gap: "12px",
-          }}
-        >
-          <div>
-            <strong>Shoulder Width:</strong>{" "}
-            {measurements.shoulder_width?.toFixed?.(2) ||
-              measurements.shoulder_width}
-          </div>
-
-          <div>
-            <strong>Hip Width:</strong>{" "}
-            {measurements.hip_width?.toFixed?.(2) ||
-              measurements.hip_width}
-          </div>
-
-          <div>
-            <strong>Torso Length:</strong>{" "}
-            {measurements.torso_length?.toFixed?.(2) ||
-              measurements.torso_length}
-          </div>
-
-          <div>
-            <strong>Leg Length:</strong>{" "}
-            {measurements.leg_length?.toFixed?.(2) ||
-              measurements.leg_length}
-          </div>
-        </div>
-      </div>
-      */}
 
       {/* Body Analysis */}
 
@@ -239,8 +229,7 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
         >
           <span
             style={{
-              background:
-                "rgba(108,99,255,0.15)",
+              background: "rgba(108,99,255,0.15)",
               color: colors.primary,
               padding: "8px 14px",
               borderRadius: "999px",
@@ -253,8 +242,7 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
 
           <span
             style={{
-              background:
-                "rgba(108,99,255,0.15)",
+              background: "rgba(108,99,255,0.15)",
               color: colors.primary,
               padding: "8px 14px",
               borderRadius: "999px",
@@ -267,8 +255,7 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
 
           <span
             style={{
-              background:
-                "rgba(108,99,255,0.15)",
+              background: "rgba(108,99,255,0.15)",
               color: colors.primary,
               padding: "8px 14px",
               borderRadius: "999px",
