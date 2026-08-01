@@ -1,38 +1,23 @@
+import { useState } from "react";
 import { colors } from "./design-system/colors";
+import CameraCapture from "./CameraCapture";
 
 function UploadScreen({ preview, loading, onUpload, onAnalyze }) {
+  const [showCamera, setShowCamera] = useState(false);
+
+  function handleCameraCapture(file, previewUrl) {
+    onUpload({ target: { files: [file] } });
+    setShowCamera(false);
+  }
+
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: "420px",
-      }}
-    >
+    <div style={{ width: "100%", maxWidth: "420px" }}>
       {/* Hero Section */}
-      <div
-        style={{
-          marginBottom: "24px",
-          textAlign: "center",
-        }}
-      >
-        <h2
-          style={{
-            color: colors.text,
-            fontSize: "28px",
-            fontWeight: "700",
-            marginBottom: "8px",
-          }}
-        >
+      <div style={{ marginBottom: "24px", textAlign: "center" }}>
+        <h2 style={{ color: colors.text, fontSize: "28px", fontWeight: "700", marginBottom: "8px" }}>
           Create Your Body Profile
         </h2>
-
-        <p
-          style={{
-            color: colors.textSecondary,
-            fontSize: "15px",
-            lineHeight: "1.6",
-          }}
-        >
+        <p style={{ color: colors.textSecondary, fontSize: "15px", lineHeight: "1.6" }}>
           Upload a full-body photo and let SmartFit AI analyze your body shape,
           measurements, and style profile.
         </p>
@@ -63,14 +48,7 @@ function UploadScreen({ preview, loading, onUpload, onAnalyze }) {
                 border: `2px solid ${colors.primary}`,
               }}
             />
-
-            <p
-              style={{
-                color: colors.success,
-                fontWeight: "600",
-                marginBottom: "16px",
-              }}
-            >
+            <p style={{ color: colors.success, fontWeight: "600", marginBottom: "16px" }}>
               ✓ Photo Ready For Analysis
             </p>
           </>
@@ -91,49 +69,47 @@ function UploadScreen({ preview, loading, onUpload, onAnalyze }) {
             >
               📸
             </div>
-
-            <p
-              style={{
-                color: colors.text,
-                fontWeight: "600",
-                marginBottom: "8px",
-              }}
-            >
+            <p style={{ color: colors.text, fontWeight: "600", marginBottom: "8px" }}>
               Front Body Photo
             </p>
-
-            <p
-              style={{
-                color: colors.textSecondary,
-                fontSize: "14px",
-                marginBottom: "20px",
-              }}
-            >
+            <p style={{ color: colors.textSecondary, fontSize: "14px", marginBottom: "20px" }}>
               Required • Full body visible
             </p>
           </>
         )}
 
-        <label
-          style={{
-            background: colors.primary,
-            color: "#FFFFFF",
-            padding: "12px 24px",
-            borderRadius: "999px",
-            cursor: "pointer",
-            fontWeight: "600",
-            display: "inline-block",
-          }}
-        >
-          Choose Photo
+        <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            onClick={() => setShowCamera(true)}
+            style={{
+              background: colors.primary,
+              color: "#FFFFFF",
+              padding: "12px 20px",
+              borderRadius: "999px",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            📷 Take Photo
+          </button>
 
-          <input
-            type="file"
-            accept="image/*"
-            onChange={onUpload}
-            style={{ display: "none" }}
-          />
-        </label>
+          <label
+            style={{
+              background: colors.card,
+              color: colors.text,
+              border: `1px solid ${colors.border}`,
+              padding: "12px 20px",
+              borderRadius: "999px",
+              cursor: "pointer",
+              fontWeight: "600",
+              display: "inline-block",
+            }}
+          >
+            Choose from Gallery
+            <input type="file" accept="image/*" onChange={onUpload} style={{ display: "none" }} />
+          </label>
+        </div>
       </div>
 
       {/* Optional Details */}
@@ -146,13 +122,7 @@ function UploadScreen({ preview, loading, onUpload, onAnalyze }) {
           border: `1px solid ${colors.border}`,
         }}
       >
-        <p
-          style={{
-            color: colors.text,
-            fontWeight: "600",
-            marginBottom: "16px",
-          }}
-        >
+        <p style={{ color: colors.text, fontWeight: "600", marginBottom: "16px" }}>
           Optional Details
         </p>
 
@@ -207,23 +177,11 @@ function UploadScreen({ preview, loading, onUpload, onAnalyze }) {
           border: `1px solid ${colors.border}`,
         }}
       >
-        <p
-          style={{
-            color: colors.text,
-            fontWeight: "600",
-            marginBottom: "14px",
-          }}
-        >
+        <p style={{ color: colors.text, fontWeight: "600", marginBottom: "14px" }}>
           SmartFit AI Will Analyze
         </p>
 
-        <div
-          style={{
-            color: colors.textSecondary,
-            fontSize: "14px",
-            lineHeight: "1.9",
-          }}
-        >
+        <div style={{ color: colors.textSecondary, fontSize: "14px", lineHeight: "1.9" }}>
           <p>✓ Body Shape Detection</p>
           <p>✓ Shoulder Analysis</p>
           <p>✓ Body Measurements</p>
@@ -232,7 +190,7 @@ function UploadScreen({ preview, loading, onUpload, onAnalyze }) {
         </div>
       </div>
 
-      {/* Analyze Button */}
+      {/* Analyze Button — THIS was missing */}
       {preview && (
         <button
           onClick={onAnalyze}
@@ -249,10 +207,15 @@ function UploadScreen({ preview, loading, onUpload, onAnalyze }) {
             cursor: "pointer",
           }}
         >
-          {loading
-            ? "Analyzing Your Body..."
-            : "Analyze My Body"}
+          {loading ? "Analyzing Your Body..." : "Analyze My Body"}
         </button>
+      )}
+
+      {showCamera && (
+        <CameraCapture
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
       )}
     </div>
   );
