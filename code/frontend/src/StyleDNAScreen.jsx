@@ -72,6 +72,18 @@ export default function StyleDNAScreen({
           {bodyShape}
         </p>
 
+        {styleDNA?.bodyShapeTip && (
+          <p style={{ color: colors.textSecondary, fontSize: 13, marginTop: 8 }}>
+            💡 {styleDNA.bodyShapeTip}
+          </p>
+        )}
+
+        {styleDNA?.skinToneNote && (
+          <p style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4 }}>
+            🎨 {styleDNA.skinToneNote}
+          </p>
+        )}
+
       </div>
 
       <button

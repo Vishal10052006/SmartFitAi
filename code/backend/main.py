@@ -158,6 +158,28 @@ def get_recommended_colors(skin_tone):
     return recommendations.get(skin_tone, ["#264653","#2A9D8F","#E9C46A","#F4A261","#E76F51"])
 
 
+def build_color_intelligence(skin_tone: str) -> dict:
+    """
+    T5.2/T5.3 — Single source of truth for color guidance.
+    Splits the 18-tone palette into best/good tiers and adds a
+    documented, undertone-based avoid list.
+    """
+    palette = get_recommended_colors(skin_tone)
+    undertone = skin_tone.split(" ")[0]  # "Warm" | "Cool" | "Neutral"
+
+    AVOID_BY_UNDERTONE = {
+        "Warm":    ["#0096C7", "#FFFFFF"],
+        "Cool":    ["#DDA15E", "#606C38"],
+        "Neutral": ["#FEE440", "#00F5D4"],
+    }
+
+    return {
+        "best": palette[:3],
+        "good": palette[3:],
+        "avoid": AVOID_BY_UNDERTONE.get(undertone, ["#FEE440", "#00F5D4"]),
+    }
+
+
 def get_style_dna_outfits(skin_tone: str, body_shape: str):
     SHAPE_RULES = {
         "Inverted Triangle": {
@@ -441,7 +463,7 @@ async def style_dna(
         # FIX: was unpacking 3 values from a 4-tuple return — crashed every request
         r, g, b, face_found = await analyse_image_with_opencv(image_bytes)
         skin_tone = get_skin_tone(r, g, b)
-        colour_palette = get_recommended_colors(skin_tone)
+        colour_palette = build_color_intelligence(skin_tone)
         face_score = confidence_engine.score_face_detection(face_found)
 
         body_shape_result = None

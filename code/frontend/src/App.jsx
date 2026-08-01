@@ -207,6 +207,9 @@ export default function App() {
       const generatedDNA = buildStyleDNA({
         stylePreference: "Smart Casual",
         occasionPreference: primaryLifestyle,
+        bodyShape: data?.style_dna?.body_shape?.body_shape || null,
+        skinTone: data?.style_dna?.skin_tone?.tone || null,
+        colourPalette: data?.style_dna?.skin_tone?.colour_palette || null,
       });
 
       setStyleDNA(generatedDNA);
@@ -578,6 +581,7 @@ export default function App() {
         {view === "palette" && (
           <ColorPaletteScreen
             skinTone={currentSkinTone}
+            colorPalette={result?.style_dna?.skin_tone?.colour_palette || latestAnalysis?.style_dna?.skin_tone?.colour_palette}
             onBack={() => setView("home")}
           />
         )}
