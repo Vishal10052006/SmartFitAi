@@ -357,6 +357,16 @@ OUTFITS = {
 }
 
 
+OCCASION_RULES = {
+    "casual":    {"outfitName": "Everyday Casual",   "avoid": ["structured blazer", "formal dress shoes"], "formalityScore": 1, "fabricNotes": "Breathable cottons and linens — comfort takes priority over structure"},
+    "office":    {"outfitName": "Office Ready",       "avoid": ["graphic tee", "distressed denim", "sneakers"], "formalityScore": 3, "fabricNotes": "Structured, wrinkle-resistant fabrics hold shape through a full workday"},
+    "party":     {"outfitName": "Night Out Ready",    "avoid": ["office blazer", "muted earth tones"], "formalityScore": 2, "fabricNotes": "Statement textures — satin, sheen, or bold pattern"},
+    "interview": {"outfitName": "Interview Sharp",    "avoid": ["bold pattern", "bright color", "casual footwear"], "formalityScore": 4, "fabricNotes": "Conservative, well-pressed, zero statement pieces"},
+    "wedding":   {"outfitName": "Wedding Guest Elegant", "avoid": ["all-white", "distressed"], "formalityScore": 4, "fabricNotes": "Elevated fabrics — linen blends or light wool with movement"},
+    "dateNight": {"outfitName": "Date Night Confident", "avoid": ["oversized", "gym wear"], "formalityScore": 3, "fabricNotes": "Fitted, not baggy — silhouette matters more than comfort here"},
+}
+
+
 @app.get("/")
 def home():
     return {"message": "SmartFit AI Backend is running!"}
@@ -395,12 +405,29 @@ def get_my_analyses(limit: int = 10, user = Depends(get_current_user)):
 
 
 @app.get("/outfits")
-def get_outfits(skin_tone: str = Query(...)):
+def get_outfits(skin_tone: str = Query(...), occasion: str = Query(None)):
     outfits = OUTFITS.get(skin_tone, [])
     if not outfits:
         return {"error": f"No outfits found for tone: {skin_tone}"}
+
+    rule = OCCASION_RULES.get(occasion) if occasion else None
+
+    if rule:
+        avoid_terms = [a.lower() for a in rule["avoid"]]
+        def is_avoided(o):
+            text = o["name"].lower()
+            return any(term in text for term in avoid_terms)
+
+        filtered = [o for o in outfits if not is_avoided(o)]
+        outfits = filtered if filtered else outfits  # never return empty
+
+        for o in outfits:
+            o["styling_tip"] = rule["fabricNotes"]
+            o["formality_score"] = rule["formalityScore"]
+
     return {
         "skin_tone": skin_tone,
+        "occasion": occasion,
         "count": len(outfits),
         "outfits": outfits
     }
