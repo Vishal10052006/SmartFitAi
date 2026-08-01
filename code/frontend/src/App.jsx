@@ -116,6 +116,7 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append("file", image);
+      formData.append("user_id", userId);
 
       // T2.4 fix: previously this never sent height, so the backend
       // silently defaulted to 170cm for every user.
@@ -340,7 +341,7 @@ export default function App() {
         alignItems: "center",
       }}
     >
-      {/* Header */}
+      {/* Header — single sticky header, Log Out merged in top-right */}
 
       <div
         style={{
@@ -355,6 +356,24 @@ export default function App() {
           position: "relative",
         }}
       >
+        <button
+          onClick={logout}
+          style={{
+            position: "absolute",
+            right: "20px",
+            top: "18px",
+            background: "transparent",
+            border: `1px solid ${colors.border}`,
+            color: colors.textSecondary,
+            borderRadius: "12px",
+            padding: "6px 12px",
+            fontSize: "12px",
+            cursor: "pointer",
+          }}
+        >
+          Log Out
+        </button>
+
         <p
           style={{
             color: colors.textSecondary,
@@ -544,50 +563,6 @@ export default function App() {
         onWardrobe={() => setView("wardrobe")}
         onPalette={() => setView("palette")}
       />
-
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-          width: "100%",
-          background: colors.background,
-          padding: "18px 20px 14px",
-          borderBottom: `1px solid ${colors.border}`,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div style={{ flex: 1 }} />
-
-        <div style={{ textAlign: "center" }}>
-          <p style={{ color: colors.textSecondary, fontSize: "12px", marginBottom: "6px" }}>
-            Your Personal AI Stylist Kiara.
-          </p>
-          <h1 style={{ fontSize: "24px", fontWeight: "800", letterSpacing: "-0.6px", margin: 0 }}>
-            SmartFit <span style={{ color: colors.primary }}>AI</span>
-          </h1>
-        </div>
-
-        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
-          <button
-            onClick={logout}
-            style={{
-              background: "transparent",
-              border: `1px solid ${colors.border}`,
-              color: colors.textSecondary,
-              borderRadius: "12px",
-              padding: "6px 12px",
-              fontSize: "12px",
-              cursor: "pointer",
-            }}
-          >
-            Log Out
-          </button>
-        </div>
-      </div>
-
     </div>
   );
 }

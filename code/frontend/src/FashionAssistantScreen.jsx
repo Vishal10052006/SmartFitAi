@@ -169,7 +169,7 @@ function FashionAssistantScreen({
       }
 
       const response = await fetch(
-        `http://127.0.0.1:8000/chat?question=${encodeURIComponent(text)}`
+        `${import.meta.env.VITE_API_URL}/chat?question=${encodeURIComponent(text)}`
       );
 
       const data = await response.json();

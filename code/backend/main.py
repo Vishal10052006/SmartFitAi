@@ -32,6 +32,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+from auth.supabase_client import get_supabase_admin
+
 app = FastAPI()
 
 limiter = Limiter(key_func=get_remote_address)
@@ -346,6 +348,19 @@ async def analyse(file: UploadFile = File(...)):
         "debug_rgb": {"r": r, "g": g, "b": b}
     }
 
+@app.get("/analyses/{user_id}")
+def get_analyses(user_id: str, limit: int = 10):
+    admin = get_supabase_admin()
+    result = (
+        admin.table("analyses")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return {"analyses": result.data}
+
 
 @app.get("/outfits")
 def get_outfits(skin_tone: str = Query(...)):
@@ -363,7 +378,7 @@ def get_outfits(skin_tone: str = Query(...)):
 async def style_dna(
     file: UploadFile = File(...),
     height_cm: float = 170.0,
-    user = Depends(get_current_user)
+    user_id: str = Form(default=None)
 ):
     allowed = ['.jpg', '.jpeg', '.png', '.webp']
     ext = os.path.splitext(file.filename)[1].lower()
@@ -456,6 +471,22 @@ async def style_dna(
         )
 
         outfit_data = get_style_dna_outfits(skin_tone, body_shape_name)
+
+        if user_id:
+            try:
+                admin = get_supabase_admin()
+                admin.table("analyses").insert({
+                    "user_id": user_id,
+                    "body_shape": body_shape_name,
+                    "body_shape_confidence": body_shape_result["confidence"] if body_shape_result else None,
+                    "skin_tone": skin_tone,
+                    "skin_tone_rgb": {"r": r, "g": g, "b": b},
+                    "style_dna": outfit_data,
+                    "measurements": body_shape_result["measurements_cm"] if body_shape_result else None,
+                }).execute()
+            except Exception as e:
+                # Never let a logging failure break the actual analysis response
+                print(f"WARNING: failed to save analysis to Supabase: {e}")
 
         return JSONResponse(status_code=200, content={
             "status": "success",
