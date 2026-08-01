@@ -1,7 +1,6 @@
 export default function BottomNavigation({
   onHome,
   onAnalyze,
-  onWardrobe,
   onPalette
 }) {
   const navStyle = {
@@ -38,7 +37,6 @@ export default function BottomNavigation({
     >
       <div onClick={onHome} style={navStyle}>🏠 Home</div>
       <div onClick={onAnalyze} style={navStyle}>📷 Analyze</div>
-      <div onClick={onWardrobe} style={navStyle}>👕 Wardrobe</div>
       <div onClick={onPalette} style={navStyle}>🎨 Palette</div>
     </div>
   );

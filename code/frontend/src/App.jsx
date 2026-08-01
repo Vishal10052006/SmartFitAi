@@ -9,7 +9,6 @@ import OutfitFeed from "./OutfitFeed";
 import HomeScreen from "./HomeScreen";
 import OnboardingScreen from "./OnboardingScreen";
 
-import WardrobeScreen from "./WardrobeScreen";
 import buildStyleDNA from "./ai/styleDNA/buildStyleDNA";
 import ColorPaletteScreen from "./ColorPaletteScreen";
 import StyleDNAScreen from "./StyleDNAScreen";
@@ -98,6 +97,55 @@ export default function App() {
       cancelled = true;
     };
   }, [isAuthenticated, accessToken, userId]);
+
+  // Module 3 fast-follow: ColorPaletteScreen, OutfitFeed, and Kiara's
+  // header all used to read result?.style_dna directly — session-only
+  // state that dies on refresh, same bug HomeScreen had before it was
+  // fixed to read from /analyses/me. Rather than patch three screens
+  // separately, we fetch the latest saved analysis once here and use
+  // it as a fallback whenever a fresh `result` isn't available yet.
+  const [latestAnalysis, setLatestAnalysis] = useState(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    let cancelled = false;
+
+    async function loadLatest() {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/analyses/me?limit=1`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setLatestAnalysis(data.analyses?.[0] || null);
+      } catch (err) {
+        console.warn("Failed to load latest analysis fallback:", err);
+      }
+    }
+
+    loadLatest();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  // Fallback chain: prefer the just-completed fresh result (immediate
+  // post-analysis flow), fall back to the last saved analysis (survives
+  // refresh). Every screen below reads from these instead of reaching
+  // into result?.style_dna directly.
+  const currentSkinTone =
+    result?.style_dna?.skin_tone?.tone || latestAnalysis?.skin_tone || null;
+  const currentBodyShape =
+    result?.style_dna?.body_shape?.body_shape ||
+    latestAnalysis?.body_shape ||
+    null;
+  const currentShapeRules =
+    result?.style_dna?.shape_rules ||
+    latestAnalysis?.style_dna?.shape_rules ||
+    null;
 
   const handleUpload = (e) => {
     const file = e.target.files[0];
@@ -456,10 +504,10 @@ export default function App() {
           <>
 
             <HomeScreen
-              skinTone={result?.style_dna?.skin_tone?.tone}
+              userId={userId}
+              accessToken={accessToken}
               styleDNA={styleDNA}
               onAnalyze={() => setView("upload")}
-              onWardrobe={() => setView("wardrobe")}
               onPalette={() => setView("palette")}
               onViewLooks={() => {
                 if (result) {
@@ -500,34 +548,36 @@ export default function App() {
 
         {view === "feed" && (
           <OutfitFeed
-            skinTone={result?.style_dna?.skin_tone?.tone}
+            skinTone={currentSkinTone}
             styleDNA={styleDNA}
             onBack={() => setView("home")}
             savedLooks={savedLooks}
             setSavedLooks={setSavedLooks}
-            bodyShape={
-              result?.style_dna?.body_shape?.body_shape
-            }
-            shapeRules={
-              result?.style_dna?.shape_rules
-            }
-
-            onOpenWardrobe={() => setView("wardrobe")}
+            bodyShape={currentBodyShape}
+            shapeRules={currentShapeRules}
             onOpenPalette={() => setView("palette")}
             onOpenUpload={() => setView("upload")}
           />
         )}
 
-        {view === "wardrobe" && (
+        {/* Wardrobe tab intentionally removed for V1 — the roadmap
+            defers Wardrobe Intelligence to V2/V3, and the current
+            WardrobeScreen only holds session-only savedLooks with no
+            backend persistence. Shipping it as a live nav item implies
+            more than it delivers. Component + route are commented out,
+            not deleted, so this is a one-line revert if the call gets
+            reversed: just uncomment this block and the BottomNavigation
+            prop below. */}
+        {/* {view === "wardrobe" && (
           <WardrobeScreen
             savedLooks={savedLooks}
             onBack={() => setView("home")}
           />
-        )}
+        )} */}
 
         {view === "palette" && (
           <ColorPaletteScreen
-            skinTone={result?.style_dna?.skin_tone?.tone}
+            skinTone={currentSkinTone}
             onBack={() => setView("home")}
           />
         )}
@@ -535,15 +585,10 @@ export default function App() {
       </div>
 
       <FashionAssistantScreen
-        skinTone={result?.style_dna?.skin_tone}
-        bodyShape={
-          result?.style_dna?.body_shape?.body_shape
-        }
+        skinTone={currentSkinTone}
+        bodyShape={currentBodyShape}
         styleDNA={styleDNA}
         onAction={(action) => {
-
-          if (action === "WARDROBE")
-            setView("wardrobe");
 
           if (action === "FEED")
             setView("feed");
@@ -560,7 +605,6 @@ export default function App() {
       <BottomNavigation
         onHome={() => setView("home")}
         onAnalyze={() => setView("upload")}
-        onWardrobe={() => setView("wardrobe")}
         onPalette={() => setView("palette")}
       />
     </div>

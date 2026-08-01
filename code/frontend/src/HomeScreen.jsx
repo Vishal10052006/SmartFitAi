@@ -1,13 +1,98 @@
+import { useState, useEffect } from "react";
 import { colors } from "./design-system/colors";
 
 export default function HomeScreen({
-  skinTone,
+  userId,
+  accessToken,
   styleDNA,
   onAnalyze,
   onViewLooks,
   onWardrobe,
   onPalette,
 }) {
+  // Module 3: dashboard now owns its own data fetch instead of relying
+  // on session-only `result` state passed down from App.jsx. This is
+  // what makes "Previous Analysis" and "Recent Activity" survive a
+  // page refresh — before this, the dashboard forgot everything the
+  // moment the tab reloaded.
+  const [analyses, setAnalyses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    // Backend now reads the user from the verified JWT via
+    // Depends(get_current_user) at /analyses/me — it no longer accepts
+    // a client-supplied user_id in the URL (that was a deliberate
+    // security fix). So this fetch is gated on accessToken, not userId.
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAnalyses() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/analyses/me?limit=10`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        if (res.status === 401) {
+          throw new Error("Session expired — please log in again");
+        }
+        if (!res.ok) throw new Error("Failed to load analysis history");
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        setAnalyses(data.analyses || []);
+      } catch (err) {
+        console.error("Failed to load analyses:", err);
+        if (cancelled) return;
+        setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadAnalyses();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  const latest = analyses[0] || null;
+  const skinTone = latest?.skin_tone;
+  const bodyShape = latest?.body_shape;
+  const bodyShapeConfidence = latest?.body_shape_confidence;
+
+  // "Previous Analysis" — everything after the most recent one
+  const previousAnalyses = analyses.slice(1, 4);
+
+  // "Recent Activity" — derived from the same analyses list for now.
+  // Each analysis run is one activity event. Saved-look events can be
+  // merged in here later once WardrobeScreen persists to a backend
+  // table instead of local-only state.
+  const recentActivity = analyses.slice(0, 5).map((a) => ({
+    id: a.id,
+    label: `Analysis run — ${a.body_shape || "Unknown shape"}`,
+    date: a.created_at,
+  }));
+
+  function formatDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  }
+
   return (
     <div
       style={{
@@ -37,7 +122,6 @@ export default function HomeScreen({
           }}
         >
           Welcome To SmartFit AI
-
         </h2>
 
         <p
@@ -49,8 +133,6 @@ export default function HomeScreen({
           }}
         >
           Know your best suited clothes based on your body shape, skin tone and Style DNA.
-          <br />
-          <br />
         </p>
       </div>
 
@@ -75,95 +157,81 @@ export default function HomeScreen({
           Your Style Profile
         </h3>
 
-        <p
-          style={{
-            color: "#6C63FF",
-            textAlign: "center",
-            fontWeight: "700",
-            fontSize: "16px",
-            marginBottom: "16px",
-          }}
-        >
-          {styleDNA?.styleIdentity || "No Style DNA Yet"}
-        </p>
-
-        <p
-          style={{
-            color: "#B3B7C2",
-            textAlign: "center",
-            fontSize: "13px",
-            marginBottom: "20px",
-          }}
-        >
-          {styleDNA?.fitPreference}
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
+        {loading ? (
+          <p style={{ color: colors.textSecondary, textAlign: "center", fontSize: "13px" }}>
+            Loading your profile...
+          </p>
+        ) : (
+          <>
             <p
               style={{
-                color: colors.textSecondary,
-                fontSize: "12px",
+                color: "#6C63FF",
+                textAlign: "center",
+                fontWeight: "700",
+                fontSize: "16px",
+                marginBottom: "16px",
               }}
             >
-              Skin Tone
+              {styleDNA?.styleIdentity || "No Style DNA Yet"}
             </p>
 
-            <h4
-              style={{
-                color: colors.primary,
-                margin: 0,
-              }}
-            >
-              {skinTone || "Not Analyzed Yet"}
-            </h4>
-          </div>
-
-          <div>
             <p
               style={{
-                color: colors.textSecondary,
-                fontSize: "12px",
+                color: "#B3B7C2",
+                textAlign: "center",
+                fontSize: "13px",
+                marginBottom: "20px",
               }}
             >
-              Looks Generated
+              {styleDNA?.fitPreference}
             </p>
 
-            <h4
+            <div
               style={{
-                color: "#FFFFFF",
-                margin: 0,
+                display: "flex",
+                justifyContent: "space-between",
               }}
             >
-              0
-            </h4>
-          </div>
+              <div>
+                <p style={{ color: colors.textSecondary, fontSize: "12px" }}>
+                  Skin Tone
+                </p>
+                <h4 style={{ color: colors.primary, margin: 0 }}>
+                  {skinTone || "Not Analyzed Yet"}
+                </h4>
+              </div>
 
-          <div>
-            <p
-              style={{
-                color: colors.textSecondary,
-                fontSize: "12px",
-              }}
-            >
-              Wardrobe Items
-            </p>
+              <div>
+                <p style={{ color: colors.textSecondary, fontSize: "12px" }}>
+                  Body Shape
+                </p>
+                <h4 style={{ color: "#FFFFFF", margin: 0 }}>
+                  {bodyShape || "—"}
+                  {bodyShapeConfidence ? (
+                    <span style={{ color: colors.textSecondary, fontSize: "11px", fontWeight: 400 }}>
+                      {" "}({bodyShapeConfidence}%)
+                    </span>
+                  ) : null}
+                </h4>
+              </div>
 
-            <h4
-              style={{
-                color: "#FFFFFF",
-                margin: 0,
-              }}
-            >
-              0
-            </h4>
-          </div>
-        </div>
+              <div>
+                <p style={{ color: colors.textSecondary, fontSize: "12px" }}>
+                  Analyses Run
+                </p>
+                <h4 style={{ color: "#FFFFFF", margin: 0 }}>
+                  {analyses.length}
+                </h4>
+              </div>
+            </div>
+          </>
+        )}
+
+        {error && (
+          <p style={{ color: "#FF6B6B", fontSize: "12px", textAlign: "center", marginTop: "12px" }}>
+            Couldn't load history — {error}
+          </p>
+        )}
       </div>
 
       {/* Primary Action */}
@@ -181,7 +249,7 @@ export default function HomeScreen({
           cursor: "pointer",
         }}
       >
-        Analyze Yourself
+        {latest ? "Re-Analyze Yourself" : "Analyze Yourself"}
       </button>
 
       {/* Secondary Action */}
@@ -202,12 +270,12 @@ export default function HomeScreen({
         🎨 View My Colors
       </button>
 
-      {/* Recommended For You */}
+      {/* Previous Analysis */}
 
       <div
         style={{
           background: "#111827",
-          border: "1px solid #232838",
+          border: `1px solid ${colors.border}`,
           borderRadius: "20px",
           padding: "20px",
         }}
@@ -220,83 +288,45 @@ export default function HomeScreen({
             textAlign: "center",
           }}
         >
-          Recommended For You
+          Previous Analysis
         </h3>
 
-        <div
-            onClick={onViewLooks}
-            style={{
+        {loading && (
+          <p style={{ color: colors.textSecondary, textAlign: "center", fontSize: "13px" }}>
+            Loading...
+          </p>
+        )}
+
+        {!loading && previousAnalyses.length === 0 && (
+          <p style={{ color: colors.textSecondary, textAlign: "center", fontSize: "13px" }}>
+            {analyses.length === 0
+              ? "Run your first analysis to see it here."
+              : "No earlier analyses yet — this is your first one."}
+          </p>
+        )}
+
+        {!loading &&
+          previousAnalyses.map((a) => (
+            <div
+              key={a.id}
+              style={{
                 background: "#1A1F2E",
-                cursor: "pointer",
-            }}
-        >
-          <p
-            style={{
-              color: "#FFFFFF",
-              fontWeight: "700",
-              marginBottom: "6px",
-            }}
-          >
-            Camel Linen Look
-          </p>
-
-          <p
-            style={{
-              color: colors.primary,
-              fontSize: "13px",
-            }}
-          >
-            92% Match
-          </p>
-
-          <p
-            style={{
-              color: "#B3B7C2",
-              fontSize: "13px",
-            }}
-          >
-            Based on your skin tone and style profile
-          </p>
-        </div>
-
-        <div
-          style={{
-            background: "#1A1F2E",
-            padding: "14px",
-            borderRadius: "14px",
-          }}
-        >
-          <p
-            style={{
-              color: "#FFFFFF",
-              fontWeight: "700",
-              marginBottom: "6px",
-            }}
-          >
-            Sage Green Co-ord
-          </p>
-
-          <p
-            style={{
-              color: colors.primary,
-              fontSize: "13px",
-            }}
-          >
-            91% Match
-          </p>
-
-          <p
-            style={{
-              color: "#B3B7C2",
-              fontSize: "13px",
-            }}
-          >
-            Recommended by SmartFit AI
-          </p>
-        </div>
+                borderRadius: "14px",
+                padding: "14px",
+                marginBottom: "10px",
+              }}
+            >
+              <p style={{ color: "#FFFFFF", fontWeight: "700", marginBottom: "4px" }}>
+                {a.body_shape || "Unknown shape"} · {a.skin_tone || "Unknown tone"}
+              </p>
+              <p style={{ color: colors.textSecondary, fontSize: "12px" }}>
+                {formatDate(a.created_at)}
+              </p>
+            </div>
+          ))}
       </div>
 
-      {/* Popular Features */}
+      {/* Recent Activity */}
 
       <div
         style={{
@@ -314,24 +344,31 @@ export default function HomeScreen({
             marginBottom: "18px",
           }}
         >
-          Popular Features
+          Recent Activity
         </h3>
 
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "14px",
-            color: "#FFFFFF",
-            textAlign: "center",
-          }}
-        >
-          <div>AI Style Analysis</div>
-          <div>Outfit Recommendations</div>
-          <div>Virtual Try-On</div>
-          <div>Smart Wardrobe</div>
+        {!loading && recentActivity.length === 0 && (
+          <p style={{ color: colors.textSecondary, textAlign: "center", fontSize: "13px" }}>
+            Nothing yet — your activity will show up here.
+          </p>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {recentActivity.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: "13px",
+                color: "#FFFFFF",
+              }}
+            >
+              <span>{item.label}</span>
+              <span style={{ color: colors.textSecondary }}>{formatDate(item.date)}</span>
+            </div>
+          ))}
         </div>
-        
       </div>
     </div>
   );
