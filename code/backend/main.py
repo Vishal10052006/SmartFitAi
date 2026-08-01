@@ -23,8 +23,9 @@ from ai.body_analysis.measurement_estimator import MeasurementEstimator
 from ai.body_analysis.measurement_converter import MeasurementConverter, get_person_height
 from ai.body_analysis.body_shape_detector import BodyShapeDetector
 from ai.body_analysis.profile_generator import ProfileGenerator
+from ai.body_analysis.confidence import ConfidenceEngine
 
-from auth.supabase_client import get_supabase
+from auth.supabase_client import get_supabase, get_supabase_admin
 from auth.routes import router as auth_router
 from auth.dependencies import get_current_user
 
@@ -32,7 +33,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from auth.supabase_client import get_supabase_admin
+confidence_engine = ConfidenceEngine()
+MIN_IMAGE_QUALITY_SCORE = 35
 
 app = FastAPI()
 
@@ -60,8 +62,15 @@ pose_model = YOLO("yolo11n-pose.pt")
 STYLE_DNA_UPLOAD_DIR = "uploads/style_dna_temp"
 os.makedirs(STYLE_DNA_UPLOAD_DIR, exist_ok=True)
 
+CRITICAL_KEYPOINTS = {
+    "Left Shoulder": 5, "Right Shoulder": 6,
+    "Left Hip": 11, "Right Hip": 12,
+    "Left Ankle": 15, "Right Ankle": 16
+}
 
-async def analyse_image_with_opencv(image_bytes: bytes) -> tuple[int, int, int]:
+
+async def analyse_image_with_opencv(image_bytes: bytes) -> tuple[int, int, int, bool]:
+    """Returns (r, g, b, face_found)."""
     try:
         img = Image.open(BytesIO(image_bytes)).convert("RGB")
         img_array = np.array(img)
@@ -81,7 +90,7 @@ async def analyse_image_with_opencv(image_bytes: bytes) -> tuple[int, int, int]:
             g = int(sum(p[1] for p in pixels) / len(pixels))
             b = int(sum(p[2] for p in pixels) / len(pixels))
             print(f"Face detected — RGB: ({r}, {g}, {b})")
-            return r, g, b
+            return r, g, b, True
     except Exception as e:
         print(f"OpenCV error: {e}")
 
@@ -96,9 +105,9 @@ async def analyse_image_with_opencv(image_bytes: bytes) -> tuple[int, int, int]:
         g = int(sum(p[1] for p in pixels) / len(pixels))
         b = int(sum(p[2] for p in pixels) / len(pixels))
         print(f"Fallback center pixel — RGB: ({r}, {g}, {b})")
-        return r, g, b
+        return r, g, b, False
     except:
-        return 194, 154, 108
+        return 194, 154, 108, False
 
 
 def get_skin_tone(r, g, b):
@@ -339,7 +348,7 @@ def health():
 @app.post("/analyse")
 async def analyse(file: UploadFile = File(...)):
     image_bytes = await file.read()
-    r, g, b = await analyse_image_with_opencv(image_bytes)
+    r, g, b, _face_found = await analyse_image_with_opencv(image_bytes)  # FIX: was 3-value unpack, now 4
     skin_tone = get_skin_tone(r, g, b)
     recommended = get_recommended_colors(skin_tone)
     return {
@@ -348,13 +357,14 @@ async def analyse(file: UploadFile = File(...)):
         "debug_rgb": {"r": r, "g": g, "b": b}
     }
 
-@app.get("/analyses/{user_id}")
-def get_analyses(user_id: str, limit: int = 10):
+
+@app.get("/analyses/me")
+def get_my_analyses(limit: int = 10, user = Depends(get_current_user)):
     admin = get_supabase_admin()
     result = (
         admin.table("analyses")
         .select("*")
-        .eq("user_id", user_id)
+        .eq("user_id", user.id)
         .order("created_at", desc=True)
         .limit(limit)
         .execute()
@@ -378,7 +388,7 @@ def get_outfits(skin_tone: str = Query(...)):
 async def style_dna(
     file: UploadFile = File(...),
     height_cm: float = 170.0,
-    user_id: str = Form(default=None)
+    user = Depends(get_current_user)
 ):
     allowed = ['.jpg', '.jpeg', '.png', '.webp']
     ext = os.path.splitext(file.filename)[1].lower()
@@ -406,12 +416,38 @@ async def style_dna(
         with open(temp_path, "wb") as f:
             f.write(image_bytes)
 
-        r, g, b = await analyse_image_with_opencv(image_bytes)
+        # --- Image Quality Gate (P0 fix) — runs BEFORE face/pose work ---
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if img_cv is None:
+            return JSONResponse(status_code=400, content={
+                "status": "error",
+                "code": "UNREADABLE_IMAGE",
+                "message": "Could not decode image. Try a different photo."
+            })
+
+        image_quality_score = confidence_engine.score_image_quality(img_cv)
+
+        if image_quality_score < MIN_IMAGE_QUALITY_SCORE:
+            return JSONResponse(status_code=422, content={
+                "status": "error",
+                "code": "LOW_QUALITY_DETECTION",
+                "message": "Photo is too blurry or low resolution. Please retake in good lighting with the camera held steady.",
+                "image_quality_score": image_quality_score
+            })
+        # --- End Quality Gate ---
+
+        # FIX: was unpacking 3 values from a 4-tuple return — crashed every request
+        r, g, b, face_found = await analyse_image_with_opencv(image_bytes)
         skin_tone = get_skin_tone(r, g, b)
         colour_palette = get_recommended_colors(skin_tone)
+        face_score = confidence_engine.score_face_detection(face_found)
 
         body_shape_result = None
         body_shape_error = None
+        unified_confidence = None
+        keypoints = None
 
         try:
             results = pose_model(temp_path, verbose=False)
@@ -419,13 +455,8 @@ async def style_dna(
             if results and results[0].keypoints is not None:
                 keypoints = results[0].keypoints.xy[0].tolist()
 
-                critical = {
-                    "Left Shoulder": 5, "Right Shoulder": 6,
-                    "Left Hip": 11, "Right Hip": 12,
-                    "Left Ankle": 15, "Right Ankle": 16
-                }
                 missing = [
-                    name for name, idx in critical.items()
+                    name for name, idx in CRITICAL_KEYPOINTS.items()
                     if keypoints[idx][0] == 0 and keypoints[idx][1] == 0
                 ]
 
@@ -457,6 +488,16 @@ async def style_dna(
                         "ratios": body_shape_data["ratios"],
                         "measurements_cm": measurements_cm
                     }
+
+                    # FIX: unified confidence engine was built but never invoked.
+                    # Wire it here now that we have all four component scores.
+                    pose_score = confidence_engine.score_pose_detection(keypoints, CRITICAL_KEYPOINTS)
+                    unified_confidence = confidence_engine.compute(
+                        image_quality_score=image_quality_score,
+                        face_detection_score=face_score,
+                        pose_detection_score=pose_score,
+                        body_shape_score=body_shape_data["confidence"],
+                    )
                 else:
                     body_shape_error = f"Partial body. Missing: {', '.join(missing)}"
             else:
@@ -472,21 +513,24 @@ async def style_dna(
 
         outfit_data = get_style_dna_outfits(skin_tone, body_shape_name)
 
-        if user_id:
-            try:
-                admin = get_supabase_admin()
-                admin.table("analyses").insert({
-                    "user_id": user_id,
-                    "body_shape": body_shape_name,
-                    "body_shape_confidence": body_shape_result["confidence"] if body_shape_result else None,
-                    "skin_tone": skin_tone,
-                    "skin_tone_rgb": {"r": r, "g": g, "b": b},
-                    "style_dna": outfit_data,
-                    "measurements": body_shape_result["measurements_cm"] if body_shape_result else None,
-                }).execute()
-            except Exception as e:
-                # Never let a logging failure break the actual analysis response
-                print(f"WARNING: failed to save analysis to Supabase: {e}")
+
+        print(f"DEBUG unified_confidence = {unified_confidence}")
+        user_id = user.id
+        try:
+            admin = get_supabase_admin()
+            admin.table("analyses").insert({
+                "user_id": user_id,
+                "body_shape": body_shape_name,
+                "body_shape_confidence": body_shape_result["confidence"] if body_shape_result else None,
+                "overall_confidence": unified_confidence["overall_confidence"] if unified_confidence else None,
+                "skin_tone": skin_tone,
+                "skin_tone_rgb": {"r": r, "g": g, "b": b},
+                "style_dna": outfit_data,
+                "measurements": body_shape_result["measurements_cm"] if body_shape_result else None,
+            }).execute()
+        except Exception as e:
+            # Never let a logging failure break the actual analysis response
+            print(f"WARNING: failed to save analysis to Supabase: {e}")
 
         return JSONResponse(status_code=200, content={
             "status": "success",
@@ -494,10 +538,12 @@ async def style_dna(
                 "skin_tone": {
                     "tone": skin_tone,
                     "rgb": {"r": r, "g": g, "b": b},
-                    "colour_palette": colour_palette
+                    "colour_palette": colour_palette,
+                    "face_detected": face_found
                 },
                 "body_shape": body_shape_result,
                 "body_shape_error": body_shape_error,
+                "confidence": unified_confidence,
                 "outfit_recommendations": outfit_data["outfits"],
                 "shape_rules": outfit_data["shape_rules"]
             }
@@ -514,11 +560,10 @@ async def style_dna(
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
+
 @app.get("/chat")
 def chat(question: str):
-
     answer = ask_gemini(question)
-
     return {
         "answer": answer
     }
