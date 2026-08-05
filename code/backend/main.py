@@ -5,7 +5,6 @@ from io import BytesIO
 from PIL import Image
 from dotenv import load_dotenv
 
-load_dotenv()
 from ai.body_analysis.gemini_service import ask_gemini
 
 import shutil
@@ -34,6 +33,15 @@ from slowapi.errors import RateLimitExceeded
 
 from fastapi.middleware.cors import CORSMiddleware
 
+load_dotenv()
+
+REQUIRED_ENV_VARS = [
+    "SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_KEY", "GEMINI_API_KEY"
+]
+missing = [v for v in REQUIRED_ENV_VARS if not os.getenv(v)]
+if missing:
+    raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")
+
 confidence_engine = ConfidenceEngine()
 MIN_IMAGE_QUALITY_SCORE = 35
 
@@ -43,14 +51,11 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://smart-fit-ai-smart-fit-ai-11.vercel.app",
-    ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=FRONTEND_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
