@@ -45,17 +45,12 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
-
-        # Production
         "https://smart-fit-ai-smart-fit-ai-11.vercel.app",
     ],
-
     allow_origin_regex=r"https://.*\.vercel\.app",
-
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
