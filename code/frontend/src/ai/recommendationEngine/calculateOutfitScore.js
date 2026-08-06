@@ -6,92 +6,24 @@ export default function calculateOutfitScore(
 ) {
   let score = 60;
 
-  if (outfit.aiGenerated) {
+  // Real tag match, not name-string guessing (see T6.1)
+  if (outfit.tags?.bodyShapeFit?.includes(bodyShape)) {
     score += 20;
   }
 
-  // Style Identity Match
-
-  if (
-    styleDNA?.styleIdentity === "Urban Trendsetter" &&
-    (
-      outfit.name?.toLowerCase().includes("bomber") ||
-      outfit.name?.toLowerCase().includes("olive")
-    )
-  ) {
-    score += 15;
+  if (outfit.tags?.styleIdentity?.includes(styleDNA?.styleIdentity)) {
+    score += 20;
   }
 
-  if (
-    styleDNA?.styleIdentity === "Clean Minimal" &&
-    (
-      outfit.name?.toLowerCase().includes("white") ||
-      outfit.name?.toLowerCase().includes("minimal")
-    )
-  ) {
-    score += 15;
-  }
-
-  if (
-    styleDNA?.styleIdentity === "Modern Professional" &&
-    outfit.occasion === "Office"
-  ) {
-    score += 15;
-  }
-
-  // Body Shape Match
-
-  if (bodyShape === "Inverted Triangle") {
-    score += 10;
-  }
-
-  // Skin Tone Match
-
+  // Outfits are already skin-tone filtered by the API — this just
+  // rewards having tone data present
   if (skinTone) {
     score += 10;
   }
 
-  if (
-    outfit.color &&
-    styleDNA?.signatureColors?.some(
-      color =>
-        outfit.name?.toLowerCase().includes(
-          color.toLowerCase()
-        )
-    )
-  ) {
-    score += 10;
-  }
-
-  if (
-    styleDNA?.styleIdentity === "Modern Professional" &&
-    (
-      outfit.name?.toLowerCase().includes("linen") ||
-      outfit.name?.toLowerCase().includes("chinos")
-    )
-  ) {
-    score += 12;
-  }
-
-  if (
-    styleDNA?.styleIdentity === "Urban Trendsetter" &&
-    (
-      outfit.name?.toLowerCase().includes("bomber") ||
-      outfit.name?.toLowerCase().includes("cargo")
-    )
-  ) {
-    score += 12;
-  }
-
-  if (
-    styleDNA?.styleIdentity === "Clean Minimal" &&
-    (
-      outfit.name?.toLowerCase().includes("white") ||
-      outfit.name?.toLowerCase().includes("tee")
-    )
-  ) {
-    score += 12;
-  }
+  // No signature-color bonus: styleDNA.signatureColors is English
+  // names ("Navy"), outfit.color is hex — no reliable match without
+  // a lookup table. Not v1 scope.
 
   if (outfit.occasion === "Office") score += 5;
   if (outfit.occasion === "Weekend") score += 3;

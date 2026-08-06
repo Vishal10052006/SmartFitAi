@@ -51,16 +51,21 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
+# FIX: FRONTEND_ORIGINS was computed from env but never wired into
+# allow_origins — the hardcoded list below silently overrode it.
+# Now both are merged so an env override actually takes effect.
+FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", "").split(",") if os.getenv("FRONTEND_ORIGINS") else []
+DEFAULT_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://smart-fit-ai-six.vercel.app",
+    "https://smart-fit-ai-smart-fit-ai-11.vercel.app",
+]
+ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + [o for o in FRONTEND_ORIGINS if o]))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://smart-fit-ai-six.vercel.app",
-        "https://smart-fit-ai-smart-fit-ai-11.vercel.app",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -228,10 +233,18 @@ def get_style_dna_outfits(skin_tone: str, body_shape: str):
     }
     base_outfits = OUTFITS.get(skin_tone, [])
     shape_rules = SHAPE_RULES.get(body_shape, {})
+
+    # T6.1: prefer real per-outfit bodyShapeFit tags when present.
+    # Falls back to "compatible" only if an outfit somehow has no tags
+    # (shouldn't happen after enrich_outfit_tags runs, but never silently
+    # mismatch a user's body shape).
     tagged_outfits = []
     for outfit in base_outfits:
         outfit_copy = outfit.copy()
-        outfit_copy["body_shape_compatible"] = True
+        fit_tags = outfit.get("tags", {}).get("bodyShapeFit", [])
+        outfit_copy["body_shape_compatible"] = (
+            body_shape in fit_tags if fit_tags else True
+        )
         outfit_copy["why"] = f"{outfit['tip']} · {shape_rules.get('fit_tip', '')}"
         tagged_outfits.append(outfit_copy)
     return {
@@ -239,6 +252,58 @@ def get_style_dna_outfits(skin_tone: str, body_shape: str):
         "shape_rules": shape_rules
     }
 
+
+def get_fit_recommendation(measurements_cm: dict, category: str, fit_type: str = "regular"):
+    """
+    T6.6 — Matches real body measurements against size_charts to return
+    an actual size label. Falls back to closest match rather than
+    returning nothing if no exact band matches.
+
+    Known limitation: chest is approximated from shoulder_width since
+    MeasurementEstimator doesn't estimate chest circumference directly.
+    This is a real accuracy gap, not a silent assumption — flagged here
+    deliberately so it isn't forgotten before a v2 measurement upgrade.
+    """
+    admin = get_supabase_admin()
+    result = (
+        admin.table("size_charts")
+        .select("*")
+        .eq("category", category)
+        .eq("fit_type", fit_type)
+        .execute()
+    )
+    rows = result.data or []
+
+    chest = measurements_cm.get("shoulder_width")
+    waist = measurements_cm.get("waist_width")
+    hip = measurements_cm.get("hip_width")
+
+    for row in rows:
+        chest_ok = row["chest_min_cm"] is None or (chest is not None and row["chest_min_cm"] <= chest <= row["chest_max_cm"])
+        waist_ok = row["waist_min_cm"] is None or (waist is not None and row["waist_min_cm"] <= waist <= row["waist_max_cm"])
+        hip_ok = row["hip_min_cm"] is None or (hip is not None and row["hip_min_cm"] <= hip <= row["hip_max_cm"])
+        if chest_ok and waist_ok and hip_ok:
+            return {
+                "size_label": row["size_label"],
+                "confidence": "high",
+                "category": category,
+                "fit_type": fit_type,
+            }
+
+    reference = chest if category != "bottom" else waist
+    if rows and reference:
+        closest = min(
+            rows,
+            key=lambda r: abs((r["chest_min_cm"] if category != "bottom" else r["waist_min_cm"]) - reference)
+        )
+        return {
+            "size_label": closest["size_label"],
+            "confidence": "low",
+            "category": category,
+            "fit_type": fit_type,
+        }
+
+    return {"size_label": "Unknown", "confidence": "none", "category": category, "fit_type": fit_type}
 
 OUTFITS = {
     "Warm Fair": [
@@ -368,6 +433,56 @@ OUTFITS = {
         {"name": "Periwinkle blazer", "style": "Classic", "occasion": "Formal", "color": "#A2D2FF", "tip": "Blue-lilac tones are your signature"},
     ],
 }
+
+
+# — Single source of truth mapping each outfit's existing "style"
+# field to real body-shape and style-identity tags. This replaces the
+# old approach of guessing fit from substrings in the outfit "name"
+# (e.g. .includes("olive")), which only worked by name-string coincidence
+# and broke the moment an outfit was renamed or added.
+#
+# Rationale for bodyShapeFit assignments mirrors the SHAPE_RULES fit_tips
+# already defined above: structured/tailored pieces suit Rectangle/
+# Trapezoid/Inverted Triangle (they add or complement structure);
+# flowing/relaxed pieces suit Oval/Triangle/Hourglass (they suit shapes
+# that benefit from drape rather than structure).
+STYLE_TAG_MAP = {
+    "Casual":       {"styleIdentity": ["Modern Professional", "Clean Minimal", "Active Lifestyle"], "bodyShapeFit": ["Rectangle", "Trapezoid", "Oval"]},
+    "Trendy":       {"styleIdentity": ["Urban Trendsetter"], "bodyShapeFit": ["Inverted Triangle", "Trapezoid"]},
+    "Ethnic":       {"styleIdentity": ["Timeless Gentleman"], "bodyShapeFit": ["Hourglass", "Triangle", "Oval"]},
+    "Smart casual": {"styleIdentity": ["Modern Professional"], "bodyShapeFit": ["Rectangle", "Trapezoid"]},
+    "Classic":      {"styleIdentity": ["Timeless Gentleman"], "bodyShapeFit": ["Rectangle", "Trapezoid", "Inverted Triangle"]},
+    "Minimal":      {"styleIdentity": ["Clean Minimal"], "bodyShapeFit": ["Rectangle", "Oval"]},
+    "Relaxed":      {"styleIdentity": ["Active Lifestyle", "Clean Minimal"], "bodyShapeFit": ["Oval", "Rectangle"]},
+    "Fresh":        {"styleIdentity": ["Clean Minimal", "Active Lifestyle"], "bodyShapeFit": ["Triangle", "Hourglass"]},
+    "Feminine":     {"styleIdentity": ["Modern Professional"], "bodyShapeFit": ["Hourglass", "Triangle"]},
+    "Streetwear":   {"styleIdentity": ["Urban Trendsetter"], "bodyShapeFit": ["Inverted Triangle", "Trapezoid"]},
+    "Formal":       {"styleIdentity": ["Timeless Gentleman"], "bodyShapeFit": ["Rectangle", "Trapezoid", "Inverted Triangle"]},
+}
+
+
+def enrich_outfit_tags():
+    """
+    Runs once at import time. Attaches a "tags" dict to every outfit in
+    OUTFITS, derived from its existing "style" field via STYLE_TAG_MAP.
+    Mutates OUTFITS in place so every downstream consumer (get_outfits,
+    get_style_dna_outfits) sees tags without needing its own lookup.
+    """
+    unmapped = set()
+    for outfits in OUTFITS.values():
+        for outfit in outfits:
+            mapping = STYLE_TAG_MAP.get(outfit["style"])
+            if mapping is None:
+                unmapped.add(outfit["style"])
+                outfit["tags"] = {"styleIdentity": [], "bodyShapeFit": []}
+            else:
+                outfit["tags"] = mapping
+    if unmapped:
+        # Fail loud in dev rather than silently shipping untagged outfits
+        print(f"WARNING: no STYLE_TAG_MAP entry for style value(s): {unmapped}")
+
+
+enrich_outfit_tags()
 
 
 OCCASION_RULES = {
@@ -507,6 +622,7 @@ async def style_dna(
         face_score = confidence_engine.score_face_detection(face_found)
 
         body_shape_result = None
+        fit_recommendations = None
         body_shape_error = None
         unified_confidence = None
         keypoints = None
@@ -551,6 +667,7 @@ async def style_dna(
                         "measurements_cm": measurements_cm
                     }
 
+                    
                     # FIX: unified confidence engine was built but never invoked.
                     # Wire it here now that we have all four component scores.
                     pose_score = confidence_engine.score_pose_detection(keypoints, CRITICAL_KEYPOINTS)
@@ -567,6 +684,21 @@ async def style_dna(
 
         except Exception as e:
             body_shape_error = str(e)
+
+
+        # Isolated on purpose — a failure here must never masquerade as
+        # a body_shape_error, and must never block outfit/body-shape
+        # data from returning to the user.
+        fit_recommendations = None
+        if body_shape_result:
+            try:
+                fit_recommendations = {
+                    "top": get_fit_recommendation(body_shape_result["measurements_cm"], "top"),
+                    "bottom": get_fit_recommendation(body_shape_result["measurements_cm"], "bottom"),
+                    "outerwear": get_fit_recommendation(body_shape_result["measurements_cm"], "outerwear"),
+                }
+            except Exception as e:
+                print(f"WARNING: fit_recommendations failed: {e}")
 
         body_shape_name = (
             body_shape_result["body_shape"]
@@ -587,6 +719,7 @@ async def style_dna(
                 "skin_tone_rgb": {"r": r, "g": g, "b": b},
                 "style_dna": outfit_data,
                 "measurements": body_shape_result["measurements_cm"] if body_shape_result else None,
+                "fit_recommendations": fit_recommendations,
             }).execute()
         except Exception as e:
             # Never let a logging failure break the actual analysis response
@@ -604,8 +737,8 @@ async def style_dna(
                 "body_shape": body_shape_result,
                 "body_shape_error": body_shape_error,
                 "confidence": unified_confidence,
-                "outfit_recommendations": outfit_data["outfits"],
-                "shape_rules": outfit_data["shape_rules"]
+                "shape_rules": outfit_data["shape_rules"],
+                "fit_recommendations": fit_recommendations
             }
         })
 

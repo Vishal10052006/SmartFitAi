@@ -268,6 +268,96 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
         </div>
       </div>
 
+      {/* Recommended Fit */}
+      {result?.style_dna?.fit_recommendations && (
+        <div
+          style={{
+            background: colors.card,
+            borderRadius: "24px",
+            padding: "24px",
+            marginBottom: "20px",
+            border: `1px solid ${colors.border}`,
+          }}
+        >
+          <h3
+            style={{
+              color: colors.text,
+              marginBottom: "16px",
+            }}
+          >
+            Recommended Fit
+          </h3>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: "10px",
+            }}
+          >
+            {Object.entries(result.style_dna.fit_recommendations).map(
+              ([category, fit]) => (
+                <div
+                  key={category}
+                  style={{
+                    background: colors.background,
+                    borderRadius: "16px",
+                    padding: "14px 10px",
+                    textAlign: "center",
+                    border: `1px solid ${colors.border}`,
+                  }}
+                >
+                  <p
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: "11px",
+                      textTransform: "capitalize",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    {category}
+                  </p>
+
+                  <p
+                    style={{
+                      color: colors.primary,
+                      fontSize: "22px",
+                      fontWeight: "700",
+                      margin: 0,
+                    }}
+                  >
+                    {fit.size_label}
+                  </p>
+
+                  {fit.confidence === "low" && (
+                    <p
+                      style={{
+                        color: colors.warning,
+                        fontSize: "10px",
+                        marginTop: "4px",
+                      }}
+                    >
+                      Estimated
+                    </p>
+                  )}
+                </div>
+              )
+            )}
+          </div>
+
+          <p
+            style={{
+              color: colors.textSecondary,
+              fontSize: "11px",
+              marginTop: "14px",
+              lineHeight: "1.5",
+            }}
+          >
+            Based on your body measurements. Sizing may vary slightly by brand.
+          </p>
+        </div>
+      )}
+
       {/* CTA */}
 
       <button
