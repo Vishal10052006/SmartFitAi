@@ -6,62 +6,54 @@ export default function generateWhyItWorks(
 ) {
   const reasons = [];
 
-  // Skin Tone
-
-  if (skinTone?.tone) {
+  // Skin tone — fixed: no longer prints raw hex, uses outfit.name
+  // or a generic phrase instead
+  if (skinTone) {
     reasons.push(
-      `${outfit.color} complements your ${skinTone.tone.toLowerCase()} skin tone`
+      `This shade complements your ${skinTone.toLowerCase()} skin tone`
     );
   }
 
-  // Style Identity
-
-  const styleMessages = {
-    "Timeless Gentleman":
-        "Creates a refined and sophisticated appearance",
-
-    "Modern Professional":
-        "Supports a polished professional image",
-
-    "Urban Trendsetter":
-        "Expresses confidence and individuality",
-
-    "Clean Minimal":
-        "Maintains a clean and modern aesthetic",
-
-    "Active Lifestyle":
-        "Balances comfort with contemporary style"
+  const styleMatch = outfit.tags?.styleIdentity?.includes(
+    styleDNA?.styleIdentity
+  );
+  if (styleMatch) {
+    const STYLE_REASONS = {
+      "Timeless Gentleman": "fits your refined, classic aesthetic",
+      "Modern Professional": "supports your polished professional image",
+      "Urban Trendsetter": "matches your bold, expressive style",
+      "Clean Minimal": "keeps your look clean and modern",
+      "Active Lifestyle": "balances comfort with contemporary style",
     };
-
-    if (styleDNA?.styleIdentity) {
     reasons.push(
-        styleMessages[styleDNA.styleIdentity] ||
-        "Matches your personal style identity"
+      STYLE_REASONS[styleDNA.styleIdentity] ||
+        "matches your personal style identity"
     );
-    }
+  }
 
-  // Body Shape
-
-  const shapeMessages = {
-    "Inverted Triangle":
-        "Balances shoulder width with lower-body volume",
-
-    "Rectangle":
-        "Adds structure and visual definition",
-
-    "Triangle":
-        "Draws attention upward and balances proportions",
-
-    "Oval":
-        "Creates a longer and leaner silhouette"
+  const shapeMatch = outfit.tags?.bodyShapeFit?.includes(bodyShape);
+  if (shapeMatch) {
+    const SHAPE_REASONS = {
+      "Inverted Triangle": "balances shoulder width with lower-body volume",
+      Rectangle: "adds structure and visual definition",
+      Triangle: "draws attention upward and balances proportions",
+      Oval: "creates a longer, leaner silhouette",
+      Hourglass: "complements your natural waist definition",
+      Trapezoid: "works with your naturally balanced proportions",
     };
-
-    if (bodyShape) {
     reasons.push(
-        shapeMessages[bodyShape] ||
-        `Works well for your ${bodyShape.toLowerCase()} body shape`
+      SHAPE_REASONS[bodyShape] ||
+        `works well for your ${bodyShape.toLowerCase()} body shape`
     );
-    }
+  }
+
+  if (outfit.occasion === "Office" || outfit.occasion === "Formal") {
+    reasons.push("appropriate formality for professional settings");
+  }
+
+  if (reasons.length === 0) {
+    reasons.push("a versatile option worth considering");
+  }
 
   return reasons;
 }
