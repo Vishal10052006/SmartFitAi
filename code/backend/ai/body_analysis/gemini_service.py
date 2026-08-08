@@ -69,19 +69,7 @@ def ask_gemini(question):
     """
 
     try:
-        try:
-            response = model.generate_content(prompt)
-
-            print("SUCCESS")
-            print(response.text)
-
-            return response.text
-
-        except Exception as e:
-            print("GEMINI ERROR:")
-            print(e)
-
-            return str(e)
+        response = model.generate_content(prompt)
 
         answer = response.text
         answer = answer.replace("**", "")
@@ -91,7 +79,6 @@ def ask_gemini(question):
 
     except Exception as e:
         print("GEMINI ERROR:", e)
-
         return (
             "Hi, I'm Kiara. "
             "I'm temporarily unavailable right now. "

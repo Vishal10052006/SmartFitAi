@@ -2,12 +2,10 @@ import os
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import google.generativeai as genai
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.5-flash")
+from ai.body_analysis.gemini_service import ask_gemini
 
 app = FastAPI(title="SmartFit AI - Cloud API")
 
@@ -24,15 +22,11 @@ def health():
 
 @app.get("/chat")
 async def chat(question: str):
-    try:
-        response = model.generate_content(question)
-        return {"answer": response.text}
-    except Exception as e:
-        return {"answer": str(e)}
+    answer = ask_gemini(question)
+    return {"answer": answer}
 
 @app.get("/outfits")
 async def outfits(skin_tone: str):
-    # Outfit data — no heavy dependencies needed
     all_outfits = [
         {"name": "Rust linen shirt + chinos", "color": "#CB997E", "occasion": "Everyday", "style": "Casual"},
         {"name": "Olive bomber + white tee", "color": "#A5A58D", "occasion": "Weekend", "style": "Streetwear"},
