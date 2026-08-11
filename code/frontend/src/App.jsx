@@ -13,16 +13,11 @@ import buildStyleDNA from "./ai/styleDNA/buildStyleDNA";
 import ColorPaletteScreen from "./ColorPaletteScreen";
 import StyleDNAScreen from "./StyleDNAScreen";
 
-import detectIntent from "./ai/assistant/detectIntent";
 import FashionAssistantScreen from "./FashionAssistantScreen";
 
 import { useAuth } from "./auth/AuthContext";
 import AuthScreen from "./auth/AuthScreen";
 
-console.log(
-  "TEST",
-  detectIntent("Open wardrobe")
-);
 
 export default function App() {
   const [view, setView] = useState("home");

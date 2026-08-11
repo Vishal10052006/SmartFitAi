@@ -51,18 +51,6 @@ function FashionAssistantScreen({
 
   useEffect(() => {
 
-    if (!SpeechRecognition) return;
-
-    recognitionRef.current =
-      new SpeechRecognition();
-
-    recognitionRef.current.continuous = false;
-    recognitionRef.current.interimResults = false;
-
-  }, []);
-
-  useEffect(() => {
-
   if (!SpeechRecognition) {
     console.log("Speech not supported");
     return;
