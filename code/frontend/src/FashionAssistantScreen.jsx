@@ -182,6 +182,11 @@ function FashionAssistantScreen({
           })
         }
       );
+
+      if (!response.ok) {
+        throw new Error("Chat request failed");
+      }
+
       const data = await response.json();
 
       setMessages((prev) => [
