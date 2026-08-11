@@ -764,12 +764,19 @@ class ChatMessage(BaseModel):
     role: str
     text: str
 
+class OutfitContext(BaseModel):
+    name: str
+    occasion: str | None = None
+    reasons: list[str] = []
+
 class ChatRequest(BaseModel):
     question: str
     history: list[ChatMessage] = []
     skin_tone: str | None = None
     body_shape: str | None = None
     style_identity: str | None = None
+    current_outfits: list[OutfitContext] = []
+
 
 @app.post("/chat")
 @limiter.limit("10/minute")
@@ -781,6 +788,7 @@ def chat(request: Request, payload: ChatRequest):
             "skin_tone": payload.skin_tone,
             "body_shape": payload.body_shape,
             "style_identity": payload.style_identity,
-        }
+        },
+        current_outfits=[o.dict() for o in payload.current_outfits]
     )
     return {"answer": answer}

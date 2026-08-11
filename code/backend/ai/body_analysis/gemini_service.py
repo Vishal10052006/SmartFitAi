@@ -15,7 +15,8 @@ model = genai.GenerativeModel(
     "gemini-flash-lite-latest"
 )
 
-def ask_gemini(question, history=None, profile=None):
+
+def ask_gemini(question, history=None, profile=None, current_outfits=None):
 
     if "your name" in question.lower():
         return (
@@ -42,6 +43,19 @@ def ask_gemini(question, history=None, profile=None):
         "\n".join(profile_lines)
         if profile_lines
         else "This user hasn't analyzed a photo yet. Don't assume their skin tone or body shape — invite them to run an analysis if it's relevant to their question."
+    )
+
+    current_outfits = current_outfits or []
+    outfit_lines = []
+    for o in current_outfits[:3]:
+        reasons = "; ".join(o.get("reasons", []))
+        occasion = o.get("occasion") or ""
+        outfit_lines.append(f"- {o['name']} ({occasion}): {reasons}")
+
+    outfit_text = (
+        "\n".join(outfit_lines)
+        if outfit_lines
+        else "No specific outfits are currently being viewed."
     )
 
     prompt = f"""
@@ -77,9 +91,14 @@ def ask_gemini(question, history=None, profile=None):
     - Do not use markdown.
     - Reply in plain text only.
     - Keep answers short and conversational.
+    - If the user asks why an outfit was recommended, use the reasons listed below.
+      Do not invent new reasons that contradict them.
 
     This user's profile:
     {profile_text}
+
+    Outfits currently shown to the user:
+    {outfit_text}
 
     Conversation so far:
     {history_text if history_text else "(no prior messages)"}

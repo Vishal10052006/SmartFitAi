@@ -19,10 +19,10 @@ function OutfitFeed({
   setSavedLooks,
   bodyShape,
   shapeRules,
-
   onOpenWardrobe,
   onOpenPalette,
-  onOpenUpload
+  onOpenUpload,
+  onOutfitsLoaded
 }) {
   const [outfits, setOutfits] = useState([])
   const [loading, setLoading] = useState(true)
@@ -54,6 +54,17 @@ function OutfitFeed({
           .sort((a, b) => b.score - a.score)
 
         setOutfits(rankedOutfits)
+
+        if (onOutfitsLoaded) {
+          onOutfitsLoaded(
+            rankedOutfits.slice(0, 3).map(o => ({
+              name: o.name,
+              occasion: o.occasion,
+              reasons: generateWhyItWorks(o, styleDNA, bodyShape, skinTone)
+            }))
+          )
+        }
+
         setLoading(false)
       })
       .catch(err => {

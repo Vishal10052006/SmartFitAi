@@ -28,6 +28,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [savedLooks, setSavedLooks] = useState([]);
   const [styleDNA, setStyleDNA] = useState(null);
+  const [visibleOutfits, setVisibleOutfits] = useState([]);
 
   const { isAuthenticated, accessToken, logout, userId } = useAuth();
 
@@ -546,15 +547,17 @@ export default function App() {
 
         {view === "feed" && (
           <OutfitFeed
-            skinTone={currentSkinTone}
+            skinTone={result?.style_dna?.skin_tone?.tone}
             styleDNA={styleDNA}
             onBack={() => setView("home")}
             savedLooks={savedLooks}
             setSavedLooks={setSavedLooks}
-            bodyShape={currentBodyShape}
-            shapeRules={currentShapeRules}
+            bodyShape={result?.style_dna?.body_shape?.body_shape}
+            shapeRules={result?.style_dna?.shape_rules}
+            onOpenWardrobe={() => setView("wardrobe")}
             onOpenPalette={() => setView("palette")}
             onOpenUpload={() => setView("upload")}
+            onOutfitsLoaded={setVisibleOutfits}
           />
         )}
 
@@ -584,20 +587,15 @@ export default function App() {
       </div>
 
       <FashionAssistantScreen
-        skinTone={currentSkinTone}
-        bodyShape={currentBodyShape}
+        skinTone={result?.style_dna?.skin_tone}
+        bodyShape={result?.style_dna?.body_shape?.body_shape}
         styleDNA={styleDNA}
+        visibleOutfits={visibleOutfits}
         onAction={(action) => {
-
-          if (action === "FEED")
-            setView("feed");
-
-          if (action === "PALETTE")
-            setView("palette");
-
-          if (action === "UPLOAD")
-            setView("upload");
-
+          if (action === "WARDROBE") setView("wardrobe");
+          if (action === "FEED") setView("feed");
+          if (action === "PALETTE") setView("palette");
+          if (action === "UPLOAD") setView("upload");
         }}
       />
 
