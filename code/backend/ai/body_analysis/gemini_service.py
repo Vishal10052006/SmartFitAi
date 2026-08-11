@@ -9,11 +9,10 @@ genai.configure(
     api_key=os.getenv("GEMINI_API_KEY")
 )
 
-print("MODEL =", "gemini-2.5-flash-lite")
-
+print("MODEL =", "gemini-flash-lite-latest")
 
 model = genai.GenerativeModel(
-    "gemini-2.5-flash-lite"
+    "gemini-flash-lite-latest"
 )
 
 def ask_gemini(question):
