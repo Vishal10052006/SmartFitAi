@@ -33,6 +33,8 @@ from slowapi.errors import RateLimitExceeded
 
 from fastapi.middleware.cors import CORSMiddleware
 
+from pydantic import BaseModel
+
 load_dotenv()
 
 REQUIRED_ENV_VARS = [
@@ -754,9 +756,11 @@ async def style_dna(
             os.remove(temp_path)
 
 
-@app.get("/chat")
-def chat(question: str):
-    answer = ask_gemini(question)
-    return {
-        "answer": answer
-    }
+class ChatRequest(BaseModel):
+    question: str
+    history: list[dict] = []
+
+@app.post("/chat")
+def chat(payload: ChatRequest):
+    answer = ask_gemini(payload.question, payload.history)
+    return {"answer": answer}

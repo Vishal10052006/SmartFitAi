@@ -169,9 +169,19 @@ function FashionAssistantScreen({
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/chat?question=${encodeURIComponent(text)}`
+        `${import.meta.env.VITE_API_URL}/chat`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: text,
+            history: messages.slice(-8).map(m => ({
+              role: m.sender === "user" ? "user" : "assistant",
+              text: m.text
+            }))
+          })
+        }
       );
-
       const data = await response.json();
 
       setMessages((prev) => [

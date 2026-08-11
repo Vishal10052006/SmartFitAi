@@ -15,13 +15,12 @@ model = genai.GenerativeModel(
     "gemini-flash-lite-latest"
 )
 
-def ask_gemini(question):
-
-    if "your name" in question.lower():
-        return (
-            "I'm Kiara, your personal AI fashion stylist inside SmartFit AI. "
-            "I help you discover outfits, colors and styles that suit you best."
-        )
+def ask_gemini(question, history=None):
+    history = history or []
+    history_text = "\n".join(
+        f"{'User' if h['role']=='user' else 'Kiara'}: {h['text']}"
+        for h in history[-8:]
+    )
 
     prompt = f"""
     You are Kiara.
@@ -62,6 +61,9 @@ def ask_gemini(question):
     - Do not use markdown.
     - Reply in plain text only.
     - Keep answers short and conversational.
+
+    Conversation so far:
+    {history_text}
 
     User Question:
     {question}
