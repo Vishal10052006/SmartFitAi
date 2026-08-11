@@ -11,7 +11,7 @@ import shutil
 import uuid
 from ultralytics import YOLO
 
-from fastapi import FastAPI, UploadFile, File, Query, Form, Depends
+from fastapi import FastAPI, Request, UploadFile, File, Query, Form, Depends
 from fastapi.responses import JSONResponse
 
 import sys
@@ -772,7 +772,8 @@ class ChatRequest(BaseModel):
     style_identity: str | None = None
 
 @app.post("/chat")
-def chat(payload: ChatRequest):
+@limiter.limit("10/minute")
+def chat(request: Request, payload: ChatRequest):
     answer = ask_gemini(
         payload.question,
         [h.dict() for h in payload.history],
