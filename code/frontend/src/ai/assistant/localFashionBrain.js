@@ -15,11 +15,11 @@ export function getLocalResponse(question) {
     };
   }
 
-  // Greetings
-
+  // Greetings — use word boundaries so "which"/"this" don't false-match "hi"
   if (
-    q.includes("hello") ||
-    q.includes("hi")
+    /\bhello\b/.test(q) ||
+    /\bhi\b/.test(q) ||
+    /\bhey\b/.test(q)
   ) {
     return {
       handled: true,
