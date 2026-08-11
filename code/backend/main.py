@@ -760,11 +760,26 @@ async def style_dna(
             os.remove(temp_path)
 
 
+class ChatMessage(BaseModel):
+    role: str
+    text: str
+
 class ChatRequest(BaseModel):
     question: str
-    history: list[dict] = []
+    history: list[ChatMessage] = []
+    skin_tone: str | None = None
+    body_shape: str | None = None
+    style_identity: str | None = None
 
 @app.post("/chat")
 def chat(payload: ChatRequest):
-    answer = ask_gemini(payload.question, payload.history)
+    answer = ask_gemini(
+        payload.question,
+        [h.dict() for h in payload.history],
+        profile={
+            "skin_tone": payload.skin_tone,
+            "body_shape": payload.body_shape,
+            "style_identity": payload.style_identity,
+        }
+    )
     return {"answer": answer}

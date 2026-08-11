@@ -178,7 +178,10 @@ function FashionAssistantScreen({
             history: messages.slice(-8).map(m => ({
               role: m.sender === "user" ? "user" : "assistant",
               text: m.text
-            }))
+            })),
+            skin_tone: typeof skinTone === "string" ? skinTone : skinTone?.tone,
+            body_shape: bodyShape,
+            style_identity: styleDNA?.styleIdentity,
           })
         }
       );
