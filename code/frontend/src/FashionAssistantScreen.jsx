@@ -14,6 +14,7 @@ function FashionAssistantScreen({
   visibleOutfits,
   onAction
 }) {
+  const [voiceError, setVoiceError] = useState(null);
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState(() => {
     const saved =
@@ -51,11 +52,10 @@ function FashionAssistantScreen({
   }, [messages]);
 
   useEffect(() => {
-
-  if (!SpeechRecognition) {
-    console.log("Speech not supported");
-    return;
-  }
+    if (!SpeechRecognition) {
+      setVoiceError("Voice isn't supported in this browser. Try Chrome or Edge.");
+      return;
+    }
 
   const recognition = new SpeechRecognition();
 
@@ -67,15 +67,10 @@ function FashionAssistantScreen({
       console.log("MIC STARTED");
     };
 
-    recognition.onspeechstart = () => {
-      console.log("SPEECH DETECTED");
-    };
-
     recognition.onspeechend = () => {
       console.log("SPEECH ENDED");
     };
 
-    // ✅ NEW - always calls latest version
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.toLowerCase();
       console.log("VOICE:", transcript);
@@ -94,6 +89,14 @@ function FashionAssistantScreen({
 
     recognition.onerror = (event) => {
       console.log("ERROR:", event.error);
+      setIsListening(false);
+      if (event.error === "not-allowed") {
+        setVoiceError("Mic access was blocked. Enable it in your browser settings.");
+      } else if (event.error === "no-speech") {
+        setVoiceError("Didn't catch that — try again.");
+      } else {
+        setVoiceError("Voice input hit a snag. Try again.");
+      }
     };
 
     recognitionRef.current = recognition;
@@ -108,6 +111,7 @@ function FashionAssistantScreen({
 
     recognition.onspeechstart = () => {
       console.log("SPEECH DETECTED");
+      setVoiceError(null);
     };
 
     recognition.onspeechend = () => {
@@ -450,20 +454,28 @@ function FashionAssistantScreen({
             Ask
           </button>
 
+          {voiceError && (
+            <p style={{ color: "#FF6B6B", fontSize: "11px", marginBottom: "8px", textAlign: "center" }}>
+              ⚠️ {voiceError}
+            </p>
+          )}
+
           <button
-            onClick={startListening}
+            onClick={isListening ? stopListening : startListening}
+            disabled={!SpeechRecognition}
             style={{
               width: "100%",
               padding: "10px",
               marginTop: "8px",
-              background: "#222",
+              background: isListening ? "#CC3333" : "#222",
               color: "#fff",
               border: "none",
               borderRadius: "8px",
-              cursor: "pointer"
+              cursor: SpeechRecognition ? "pointer" : "not-allowed",
+              opacity: SpeechRecognition ? 1 : 0.5,
             }}
           >
-            🎙️ Talk To kiera
+            {isListening ? "⏹ Stop Listening" : "🎙️ Talk To Kiara"}
           </button>
 
         </div>
