@@ -28,7 +28,6 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [savedLooks, setSavedLooks] = useState([]);
   const [styleDNA, setStyleDNA] = useState(null);
   const [visibleOutfits, setVisibleOutfits] = useState([]);
 
