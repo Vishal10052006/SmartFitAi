@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import generateWhyItWorks from "./ai/recommendationEngine/generateWhyItWorks";
 import calculateOutfitScore from "./ai/recommendationEngine/calculateOutfitScore";
+import { shareElementAsImage } from "./utils/shareImage";
 
 const OCCASIONS = [
   { value: "casual", label: "Casual" },
@@ -31,6 +32,10 @@ function OutfitFeed({
   const [selectedOutfit, setSelectedOutfit] = useState(null)
   const [occasionDNA, setOccasionDNA] = useState(null)
   const [saveError, setSaveError] = useState(null)
+  const [shareError, setShareError] = useState(null)
+  const [sharingIndex, setSharingIndex] = useState(null)
+
+  const cardRefs = useRef({});
 
   useEffect(() => {
     if (!skinTone) return
@@ -93,7 +98,7 @@ function OutfitFeed({
     );
     if (alreadySaved) return;
 
-    setSavedLooks((prev) => [...prev, look]); // optimistic
+    setSavedLooks((prev) => [...prev, look]);
     setSaveError(null);
 
     try {
@@ -117,6 +122,26 @@ function OutfitFeed({
       );
       setSaveError("Couldn't save that look — try again.");
     }
+  }
+
+  async function handleShare(o, index) {
+    setShareError(null);
+    setSharingIndex(index);
+    try {
+      await shareElementAsImage(
+        cardRefs.current[index],
+        `smartfit-${o.name.replace(/\s+/g, "-").toLowerCase()}.png`,
+        `Check out this ${o.name} look from SmartFit AI — ${matchLabel(o.score)}% match for me!`
+      );
+    } catch (err) {
+      setShareError(err.message || "Couldn't share this look.");
+    } finally {
+      setSharingIndex(null);
+    }
+  }
+
+  function matchLabel(score) {
+    return score;
   }
 
   return (
@@ -187,6 +212,12 @@ function OutfitFeed({
         </p>
       )}
 
+      {shareError && (
+        <p style={{ color: "#ff6b6b", textAlign: "center", fontSize: "13px", marginBottom: "12px" }}>
+          ⚠️ {shareError}
+        </p>
+      )}
+
       {!loading && !error && outfits.length === 0 && (
         <p style={{ color: "#888", textAlign: "center", fontSize: "14px" }}>
           No recommendations found.
@@ -218,10 +249,12 @@ function OutfitFeed({
             const isSaved = savedLooks.some(
               (saved) => saved.name === o.name && saved.occasion === o.occasion
             );
+            const isSharing = sharingIndex === i;
 
             return (
               <div
                 key={i}
+                ref={(el) => (cardRefs.current[i] = el)}
                 style={{
                   borderRadius: "16px",
                   overflow: "hidden",
@@ -264,7 +297,7 @@ function OutfitFeed({
                     ))}
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px", fontSize: "12px", color: "#fff" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "6px", marginTop: "12px", fontSize: "12px", color: "#fff" }}>
                     <button
                       onClick={() => handleSaveLook(o)}
                       disabled={isSaved}
@@ -275,18 +308,35 @@ function OutfitFeed({
                         borderRadius: "8px",
                         padding: "8px",
                         cursor: isSaved ? "default" : "pointer",
-                        fontSize: "11px"
+                        fontSize: "10px",
+                        flex: 1
                       }}
                     >
-                      {isSaved ? "✓ Saved" : "❤️ Save Look"}
+                      {isSaved ? "✓ Saved" : "❤️ Save"}
                     </button>
                     <button
-                      onClick={() => setSelectedOutfit(o)}
-                      style={{ background: "#333", color: "#fff", border: "none", borderRadius: "8px", padding: "8px", cursor: "pointer", fontSize: "11px" }}
+                      onClick={() => handleShare(o, i)}
+                      disabled={isSharing}
+                      style={{
+                        background: "#333",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "8px",
+                        cursor: isSharing ? "default" : "pointer",
+                        fontSize: "10px",
+                        flex: 1
+                      }}
                     >
-                      View Similar
+                      {isSharing ? "..." : "📤 Share"}
                     </button>
                   </div>
+                  <button
+                    onClick={() => setSelectedOutfit(o)}
+                    style={{ background: "#333", color: "#fff", border: "none", borderRadius: "8px", padding: "8px", cursor: "pointer", fontSize: "10px", width: "100%", marginTop: "6px" }}
+                  >
+                    View Similar
+                  </button>
                 </div>
               </div>
             )
