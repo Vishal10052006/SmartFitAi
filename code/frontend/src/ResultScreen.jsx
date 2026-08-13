@@ -1,9 +1,12 @@
+import AnalysisSummary from "./AnalysisSummary";
+import MeasurementBreakdown from "./MeasurementBreakdown";
+
 import { colors } from "./design-system/colors";
 
 function ResultScreen({ result, onSeeOutfits, onReset }) {
-  
+
   console.log(result);
-  
+
   const bodyShape =
     result?.style_dna?.body_shape?.body_shape ||
     "Unknown";
@@ -17,19 +20,6 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
   const confidenceData = result?.style_dna?.confidence;
 
   const confidenceScore = confidenceData?.overall_confidence ?? null;
-  const confidenceLabel = confidenceData?.label ?? "Confidence Unavailable";
-
-  // Map label bands to colors so the UI visually reflects trust level,
-  // not just a static green "High Accuracy" regardless of the score.
-  function getConfidenceColor(score) {
-    if (score === null) return colors.textSecondary;
-    if (score >= 85) return colors.success;
-    if (score >= 65) return colors.primary;
-    if (score >= 45) return colors.warning;
-    return colors.error;
-  }
-
-  const confidenceColor = getConfidenceColor(confidenceScore);
 
   return (
     <div
@@ -38,133 +28,8 @@ function ResultScreen({ result, onSeeOutfits, onReset }) {
         maxWidth: "420px",
       }}
     >
-      {/* Analysis Complete */}
-
-      <div
-        style={{
-          background: colors.card,
-          borderRadius: "24px",
-          padding: "28px",
-          marginBottom: "20px",
-          textAlign: "center",
-          border: `1px solid ${colors.border}`,
-        }}
-      >
-        <p
-          style={{
-            color: colors.success,
-            fontSize: "14px",
-            fontWeight: "600",
-            marginBottom: "10px",
-          }}
-        >
-          ✓ Analysis Complete
-        </p>
-
-        <p
-          style={{
-            color: colors.textSecondary,
-            fontSize: "13px",
-            marginBottom: "8px",
-          }}
-        >
-          Your Body Shape
-        </p>
-
-        <h2
-          style={{
-            color: colors.text,
-            fontSize: "30px",
-            fontWeight: "700",
-            marginBottom: "10px",
-          }}
-        >
-          {bodyShape}
-        </h2>
-
-        <p
-          style={{
-            color: colors.textSecondary,
-            lineHeight: "1.6",
-          }}
-        >
-          SmartFit AI analyzed your body structure
-          and generated your body profile.
-        </p>
-      </div>
-
-      {/* Confidence Score */}
-
-      <div
-        style={{
-          background: colors.card,
-          borderRadius: "24px",
-          padding: "22px",
-          marginBottom: "20px",
-          border: `1px solid ${colors.border}`,
-          textAlign: "center",
-        }}
-      >
-        <p
-          style={{
-            color: colors.textSecondary,
-            marginBottom: "8px",
-          }}
-        >
-          AI Confidence Score
-        </p>
-
-        <h2
-          style={{
-            color: confidenceColor,
-            margin: 0,
-            fontSize: "42px",
-          }}
-        >
-          {confidenceScore !== null ? `${confidenceScore}%` : "—"}
-        </h2>
-
-        <p
-          style={{
-            color: confidenceColor,
-            marginTop: "8px",
-            fontWeight: "600",
-          }}
-        >
-          {confidenceLabel}
-        </p>
-
-        {/* Optional breakdown — only render if the backend sent it */}
-        {confidenceData?.breakdown && (
-          <div
-            style={{
-              marginTop: "16px",
-              paddingTop: "16px",
-              borderTop: `1px solid ${colors.border}`,
-              textAlign: "left",
-              fontSize: "12px",
-              color: colors.textSecondary,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-              <span>Image Quality</span>
-              <span>{confidenceData.breakdown.image_quality}%</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-              <span>Face Detection</span>
-              <span>{confidenceData.breakdown.face_detection}%</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-              <span>Pose Detection</span>
-              <span>{confidenceData.breakdown.pose_detection}%</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>Body Shape Match</span>
-              <span>{confidenceData.breakdown.body_shape}%</span>
-            </div>
-          </div>
-        )}
-      </div>
+      <AnalysisSummary bodyShape={bodyShape} confidenceScore={confidenceScore} />
+      <MeasurementBreakdown confidenceData={confidenceData} />
 
       {/* Body Analysis */}
 
