@@ -1,6 +1,59 @@
+import { useState, useEffect } from "react";
 import { colors } from "./design-system/colors";
 
-function WardrobeScreen({ savedLooks, onBack }) {
+function WardrobeScreen({ accessToken, onBack }) {
+  const [looks, setLooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadLooks() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/looks/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) throw new Error("Failed to load wardrobe");
+        const data = await res.json();
+        if (cancelled) return;
+        setLooks(data.looks || []);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadLooks();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  async function handleDelete(lookId) {
+    const prev = looks;
+    setLooks((current) => current.filter((l) => l.id !== lookId)); // optimistic
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/looks/${lookId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setLooks(prev); // revert
+    }
+  }
+
   return (
     <div
       style={{
@@ -8,8 +61,6 @@ function WardrobeScreen({ savedLooks, onBack }) {
         maxWidth: "420px",
       }}
     >
-      {/* Header */}
-
       <div
         style={{
           background: colors.card,
@@ -41,9 +92,19 @@ function WardrobeScreen({ savedLooks, onBack }) {
         </p>
       </div>
 
-      {/* Empty State */}
+      {loading && (
+        <p style={{ color: colors.textSecondary, textAlign: "center", fontSize: "13px" }}>
+          Loading your wardrobe...
+        </p>
+      )}
 
-      {savedLooks.length === 0 && (
+      {error && (
+        <p style={{ color: "#FF6B6B", textAlign: "center", fontSize: "13px", marginBottom: "16px" }}>
+          ⚠️ {error}
+        </p>
+      )}
+
+      {!loading && looks.length === 0 && !error && (
         <div
           style={{
             background: colors.card,
@@ -68,18 +129,16 @@ function WardrobeScreen({ savedLooks, onBack }) {
         </div>
       )}
 
-      {/* Saved Looks */}
-
-      {savedLooks.length > 0 && (
+      {!loading && looks.length > 0 && (
         <div
           style={{
             display: "grid",
             gap: "14px",
           }}
         >
-          {savedLooks.map((look, index) => (
+          {looks.map((look) => (
             <div
-              key={index}
+              key={look.id}
               style={{
                 background: colors.card,
                 borderRadius: "20px",
@@ -90,19 +149,36 @@ function WardrobeScreen({ savedLooks, onBack }) {
               <div
                 style={{
                   height: "80px",
-                  background: look.color,
+                  background: look.color || colors.primary,
                 }}
               />
 
               <div style={{ padding: "16px" }}>
-                <h3
-                  style={{
-                    color: colors.text,
-                    marginBottom: "8px",
-                  }}
-                >
-                  ❤️ {look.name}
-                </h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <h3
+                    style={{
+                      color: colors.text,
+                      marginBottom: "8px",
+                      marginTop: 0,
+                    }}
+                  >
+                    ❤️ {look.outfit_name}
+                  </h3>
+
+                  <button
+                    onClick={() => handleDelete(look.id)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: colors.textMuted,
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      padding: "2px 6px",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
 
                 <p
                   style={{
@@ -110,7 +186,7 @@ function WardrobeScreen({ savedLooks, onBack }) {
                     fontSize: "14px",
                   }}
                 >
-                  {look.style} • {look.occasion}
+                  {look.style_identity} • {look.occasion}
                 </p>
               </div>
             </div>

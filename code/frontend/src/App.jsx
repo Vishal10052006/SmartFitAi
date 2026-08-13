@@ -18,6 +18,8 @@ import FashionAssistantScreen from "./FashionAssistantScreen";
 import { useAuth } from "./auth/AuthContext";
 import AuthScreen from "./auth/AuthScreen";
 
+import WardrobeScreen from "./WardrobeScreen";
+
 
 export default function App() {
   const [view, setView] = useState("home");
@@ -123,6 +125,41 @@ export default function App() {
     }
 
     loadLatest();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+
+  const [savedLooksFromServer, setSavedLooksFromServer] = useState([]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    let cancelled = false;
+
+    async function loadLooks() {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/looks/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setSavedLooksFromServer(
+          (data.looks || []).map((l) => ({
+            name: l.outfit_name,
+            color: l.color,
+            occasion: l.occasion,
+            style: l.style_identity,
+          }))
+        );
+      } catch (err) {
+        console.warn("Failed to load saved looks:", err);
+      }
+    }
+
+    loadLooks();
     return () => {
       cancelled = true;
     };
@@ -550,14 +587,22 @@ export default function App() {
             skinTone={result?.style_dna?.skin_tone?.tone}
             styleDNA={styleDNA}
             onBack={() => setView("home")}
-            savedLooks={savedLooks}
-            setSavedLooks={setSavedLooks}
+            savedLooks={savedLooksFromServer}
+            setSavedLooks={setSavedLooksFromServer}
             bodyShape={result?.style_dna?.body_shape?.body_shape}
             shapeRules={result?.style_dna?.shape_rules}
             onOpenWardrobe={() => setView("wardrobe")}
             onOpenPalette={() => setView("palette")}
             onOpenUpload={() => setView("upload")}
             onOutfitsLoaded={setVisibleOutfits}
+            accessToken={accessToken}
+          />
+        )}
+
+        {view === "wardrobe" && (
+          <WardrobeScreen
+            accessToken={accessToken}
+            onBack={() => setView("home")}
           />
         )}
 
@@ -603,6 +648,7 @@ export default function App() {
         onHome={() => setView("home")}
         onAnalyze={() => setView("upload")}
         onPalette={() => setView("palette")}
+        onWardrobe={() => setView("wardrobe")}
       />
     </div>
   );

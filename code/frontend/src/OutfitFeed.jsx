@@ -15,20 +15,22 @@ function OutfitFeed({
   skinTone,
   styleDNA,
   onBack,
-  savedLooks,
-  setSavedLooks,
+  savedLooks = {savedLooksFromServer},
+  setSavedLooks={setSavedLooksFromServer},
   bodyShape,
   shapeRules,
   onOpenWardrobe,
   onOpenPalette,
   onOpenUpload,
-  onOutfitsLoaded
+  onOutfitsLoaded,
+  accessToken
 }) {
   const [outfits, setOutfits] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedOutfit, setSelectedOutfit] = useState(null)
-  const [occasionDNA, setOccasionDNA] = useState(null) // NEW — T5.14, null = "All"
+  const [occasionDNA, setOccasionDNA] = useState(null)
+  const [saveError, setSaveError] = useState(null)
 
   useEffect(() => {
     if (!skinTone) return
@@ -75,12 +77,50 @@ function OutfitFeed({
     skinTone,
     styleDNA,
     bodyShape,
-    occasionDNA // NEW — refetch when occasion changes
+    occasionDNA
   ])
+
+  async function handleSaveLook(o) {
+    const look = {
+      name: o.name,
+      color: o.color,
+      occasion: o.occasion,
+      style: styleDNA?.styleIdentity || "SmartFit Style",
+    };
+
+    const alreadySaved = savedLooks.some(
+      (saved) => saved.name === look.name && saved.occasion === look.occasion
+    );
+    if (alreadySaved) return;
+
+    setSavedLooks((prev) => [...prev, look]); // optimistic
+    setSaveError(null);
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/looks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          outfit_name: o.name,
+          color: o.color,
+          occasion: o.occasion,
+          style_identity: styleDNA?.styleIdentity,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+    } catch {
+      setSavedLooks((prev) =>
+        prev.filter((l) => !(l.name === look.name && l.occasion === look.occasion))
+      );
+      setSaveError("Couldn't save that look — try again.");
+    }
+  }
 
   return (
     <div style={{ width: "100%", maxWidth: "400px" }}>
-      {/* NEW — Occasion Picker */}
       <div
         style={{
           display: "flex",
@@ -141,6 +181,12 @@ function OutfitFeed({
         </p>
       )}
 
+      {saveError && (
+        <p style={{ color: "#ff6b6b", textAlign: "center", fontSize: "13px", marginBottom: "12px" }}>
+          ⚠️ {saveError}
+        </p>
+      )}
+
       {!loading && !error && outfits.length === 0 && (
         <p style={{ color: "#888", textAlign: "center", fontSize: "14px" }}>
           No recommendations found.
@@ -154,7 +200,6 @@ function OutfitFeed({
         </div>
       )}
 
-      {/* NEW — occasion-specific styling tip, shown when a specific occasion is selected */}
       {occasionDNA && outfits[0]?.styling_tip && (
         <div style={{ background: "#1a1a1a", padding: "16px", borderRadius: "16px", marginBottom: "20px", border: "1px solid #2a2a2a" }}>
           <h3 style={{ color: "#fff" }}>
@@ -170,6 +215,9 @@ function OutfitFeed({
             const matchScore = o.score
             const reasons = generateWhyItWorks(o, styleDNA, bodyShape, skinTone);
             const strengths = styleDNA?.strengths || [];
+            const isSaved = savedLooks.some(
+              (saved) => saved.name === o.name && saved.occasion === o.occasion
+            );
 
             return (
               <div
@@ -218,17 +266,19 @@ function OutfitFeed({
 
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px", fontSize: "12px", color: "#fff" }}>
                     <button
-                      onClick={() => {
-                        const look = { name: o.name, color: o.color, occasion: o.occasion, style: styleDNA?.styleIdentity || "SmartFit Style" }
-                        const alreadySaved = savedLooks.some(saved => saved.name === look.name)
-                        if (!alreadySaved) {
-                          setSavedLooks(prev => [...prev, look])
-                          alert("Look Saved To Wardrobe ❤️")
-                        }
+                      onClick={() => handleSaveLook(o)}
+                      disabled={isSaved}
+                      style={{
+                        background: isSaved ? "#333" : "#6C63FF",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "8px",
+                        cursor: isSaved ? "default" : "pointer",
+                        fontSize: "11px"
                       }}
-                      style={{ background: "#6C63FF", color: "#fff", border: "none", borderRadius: "8px", padding: "8px", cursor: "pointer", fontSize: "11px" }}
                     >
-                      ❤️ Save Look
+                      {isSaved ? "✓ Saved" : "❤️ Save Look"}
                     </button>
                     <button
                       onClick={() => setSelectedOutfit(o)}

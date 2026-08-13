@@ -11,7 +11,7 @@ import shutil
 import uuid
 from ultralytics import YOLO
 
-from fastapi import FastAPI, Request, UploadFile, File, Query, Form, Depends
+from fastapi import FastAPI, Request, UploadFile, File, Query, Form, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 import sys
@@ -792,3 +792,50 @@ def chat(request: Request, payload: ChatRequest):
         current_outfits=[o.dict() for o in payload.current_outfits]
     )
     return {"answer": answer}
+
+
+class SaveLookRequest(BaseModel):
+    analysis_id: str | None = None
+    outfit_name: str
+    color: str | None = None
+    occasion: str | None = None
+    style_identity: str | None = None
+
+
+@app.post("/looks")
+async def save_look(payload: SaveLookRequest, user = Depends(get_current_user)):
+    admin = get_supabase_admin()
+    try:
+        result = admin.table("saved_looks").insert({
+            "user_id": user.id,
+            "analysis_id": payload.analysis_id,
+            "outfit_name": payload.outfit_name,
+            "color": payload.color,
+            "occasion": payload.occasion,
+            "style_identity": payload.style_identity,
+        }).execute()
+    except Exception as e:
+        if "duplicate key" in str(e).lower():
+            return JSONResponse(status_code=200, content={"status": "already_saved"})
+        raise HTTPException(status_code=500, detail=f"Failed to save look: {e}")
+    return {"status": "success", "look": result.data[0] if result.data else None}
+
+
+@app.get("/looks/me")
+async def get_my_looks(user = Depends(get_current_user)):
+    admin = get_supabase_admin()
+    result = (
+        admin.table("saved_looks")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return {"looks": result.data}
+
+
+@app.delete("/looks/{look_id}")
+async def delete_look(look_id: str, user = Depends(get_current_user)):
+    admin = get_supabase_admin()
+    admin.table("saved_looks").delete().eq("id", look_id).eq("user_id", user.id).execute()
+    return {"status": "deleted"}
